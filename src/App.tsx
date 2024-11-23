@@ -9,9 +9,16 @@ interface NetworkStatus {
   last_checked: string;
 }
 
+interface Credentials {
+  username: string;
+  password: string;
+}
+
+
 function App() {
   const [isOnline, setIsOnline] = useState<boolean | null>(null);
   const [lastChecked, setLastChecked] = useState<string>("");
+  const [credentials, setCredentials] = useState<Credentials | null>(null);
 
   // Function to check the network status
   const checkNetworkStatus = async () => {
@@ -32,13 +39,35 @@ function App() {
     checkNetworkStatus();
 
     // Periodically check the network every 10 seconds
-    const interval = setInterval(checkNetworkStatus, 10000);
+    const interval = setInterval(checkNetworkStatus, 100000);
 
     return () => clearInterval(interval);  // Cleanup on unmount
   }, []);
 
+  useEffect(() => {
+    // Fetch credentials when component mounts
+    const fetchCredentials = async () => {
+      try {
+        const creds = await invoke<Credentials>('get_credentials');
+        setCredentials(creds);
+      } catch (error) {
+        console.error('Failed to fetch credentials:', error);
+      }
+    };
+
+    fetchCredentials();
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {credentials && (
+        <div className="p-4 bg-yellow-100 text-center">
+          <p className="text-gray-700">
+            Test Credentials - Username: <span className="font-mono">{credentials.username}</span>,
+            Password: <span className="font-mono">{credentials.password}</span>
+          </p>
+        </div>
+      )}
       <div className="p-4 text-center">
         {isOnline === null ? (
           <p>Checking network status...</p>

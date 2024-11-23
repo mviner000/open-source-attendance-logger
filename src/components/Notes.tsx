@@ -19,6 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { CalendarDays, PencilLine, X } from 'lucide-react'
+import AuthModal from './AuthModal'
 
 const Notes: React.FC = () => {
   // States
@@ -32,9 +33,22 @@ const Notes: React.FC = () => {
   const [noteToDelete, setNoteToDelete] = useState<number | null>(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [editingState, setEditingState] = useState<{ id: number | null, field: 'title' | 'content' | null }>({ id: null, field: null })
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const [authAction, setAuthAction] = useState<'create' | 'delete'>('create')
+  const [credentials, setCredentials] = useState<{ username: string; password: string }>({ username: '', password: '' })
 
   const { toast } = useToast()
   const editingRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
+
+  // Fetch credentials
+  const fetchCredentials = async () => {
+    try {
+      const creds = await NotesApi.getCredentials()
+      setCredentials(creds)
+    } catch (err) {
+      console.error('Failed to fetch credentials:', err)
+    }
+  }
 
   // Callbacks
   const addToast = useCallback((message: string, level: LogLevel) => {
@@ -89,6 +103,31 @@ const Notes: React.FC = () => {
   // Create new note
   const handleCreateNote = async (e: React.FormEvent) => {
     e.preventDefault()
+    setAuthAction('create')
+    setIsAuthModalOpen(true)
+  }
+
+  // Handle auth submission
+  const handleAuthSubmit = async (inputCredentials: { username: string; password: string }) => {
+    try {
+      if (inputCredentials.username === credentials.username && 
+          inputCredentials.password === credentials.password) {
+        setIsAuthModalOpen(false)
+        if (authAction === 'create') {
+          await createNote(inputCredentials)
+        } else if (authAction === 'delete' && noteToDelete) {
+          await deleteNote(noteToDelete, inputCredentials)
+        }
+      } else {
+        addToast('Invalid credentials', 'error')
+      }
+    } catch (err) {
+      addToast('Authentication failed', 'error')
+    }
+  }
+
+  // Create note after authentication
+  const createNote = async (auth: { username: string; password: string }) => {
     try {
       const trimmedTitle = title.trim()
       const trimmedContent = content.trim()
@@ -102,7 +141,7 @@ const Notes: React.FC = () => {
         title: trimmedTitle,
         content: trimmedContent,
       }
-      await NotesApi.createNote(newNote)
+      await NotesApi.createNote(newNote, auth.username, auth.password)
       setTitle('')
       setContent('')
       await fetchNotes()
@@ -117,7 +156,7 @@ const Notes: React.FC = () => {
   // Update note
   const handleUpdateNote = async (noteId: number, updatedNote: UpdateNoteRequest) => {
     try {
-      await NotesApi.updateNote(noteId, updatedNote)
+      await NotesApi.updateNote(noteId, updatedNote, credentials.username, credentials.password)
       await fetchNotes()
       setEditingState({ id: null, field: null })
       setError(null)
@@ -129,11 +168,15 @@ const Notes: React.FC = () => {
   }
 
   // Delete note
-  const handleDeleteNote = async () => {
-    if (!noteToDelete) return
+  const handleDeleteNote = () => {
+    setAuthAction('delete')
+    setIsAuthModalOpen(true)
+  }
 
+  // Delete note after authentication
+  const deleteNote = async (noteId: number, auth: { username: string; password: string }) => {
     try {
-      await NotesApi.deleteNote(noteToDelete)
+      await NotesApi.deleteNote(noteId, auth.username, auth.password)
       await fetchNotes()
       setError(null)
       addToast('Note deleted successfully', 'success')
@@ -205,6 +248,7 @@ const Notes: React.FC = () => {
 
   useEffect(() => {
     fetchNotes()
+    fetchCredentials()
   }, [fetchNotes])
 
   useEffect(() => {
@@ -290,7 +334,7 @@ const Notes: React.FC = () => {
                     ref={editingRef as React.RefObject<HTMLInputElement>}
                     value={note.title}
                     onChange={(e) => {
-                      const updatedNotes = notes.map(n => 
+                      const updatedNotes = notes.map(n =>
                         n.id === note.id ? { ...n, title: e.target.value } : n
                       )
                       setNotes(updatedNotes)
@@ -300,7 +344,7 @@ const Notes: React.FC = () => {
                     autoFocus
                   />
                 ) : (
-                  <CardTitle 
+                  <CardTitle
                     onClick={() => setEditingState({ id: note.id!, field: 'title' })}
                     className="cursor-text hover:bg-accent hover:text-accent-foreground p-1 rounded"
                   >
@@ -314,7 +358,7 @@ const Notes: React.FC = () => {
                     ref={editingRef as React.RefObject<HTMLTextAreaElement>}
                     value={note.content}
                     onChange={(e) => {
-                      const updatedNotes = notes.map(n => 
+                      const updatedNotes = notes.map(n =>
                         n.id === note.id ? { ...n, content: e.target.value } : n
                       )
                       setNotes(updatedNotes)
@@ -325,7 +369,7 @@ const Notes: React.FC = () => {
                     autoFocus
                   />
                 ) : (
-                  <p 
+                  <p
                     className="text-sm mb-4 cursor-text hover:bg-accent hover:text-accent-foreground p-2 rounded border border-border"
                     onClick={() => setEditingState({ id: note.id!, field: 'content' })}
                   >
@@ -380,6 +424,12 @@ const Notes: React.FC = () => {
         </div>
       </div>
       <ToastViewport />
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSubmit={handleAuthSubmit}
+        action={authAction === 'create' ? 'create a new note' : 'delete the note'}
+      />
     </ToastProvider>
   )
 }

@@ -16,6 +16,14 @@ pub struct Note {
     pub updated_at: DateTime<Utc>,
 }
 
+// Add this new struct to store credentials
+#[derive(Serialize)]
+pub struct Credentials {
+    username: String,
+    password: String,
+}
+
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateNoteRequest {
     pub title: String,
@@ -73,6 +81,7 @@ impl Database {
         info!("Opening database at {:?}", db_path);
         let conn = Connection::open(db_path)?;
         
+        // Create notes table
         info!("Creating notes table if it doesn't exist");
         conn.execute(
             "CREATE TABLE IF NOT EXISTS notes (
@@ -85,11 +94,80 @@ impl Database {
             [],
         )?;
 
+        // Create users table
+        info!("Creating users table if it doesn't exist");
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL
+            )",
+            [],
+        )?;
+
+        // Insert default admin user if it doesn't exist
+        conn.execute(
+            "INSERT OR IGNORE INTO users (username, password) VALUES (?1, ?2)",
+            params!["admin22", "password21"],
+        )?;
+
         info!("Database initialization completed successfully");
         Ok(Database {
             conn: RwLock::new(conn)
         })
     }
+
+    pub fn authenticate(&self, username: &str, password: &str) -> Result<bool, String> {
+        info!("Authenticating user: {}", username);
+        let conn = self.conn.read().map_err(|e| {
+            error!("Failed to acquire database lock: {}", e);
+            e.to_string()
+        })?;
+
+        let mut stmt = conn.prepare(
+            "SELECT COUNT(*) FROM users WHERE username = ? AND password = ?"
+        ).map_err(|e| {
+            error!("Failed to prepare authentication statement: {}", e);
+            e.to_string()
+        })?;
+
+        let count: i64 = stmt.query_row(params![username, password], |row| row.get(0))
+            .map_err(|e| {
+                error!("Failed to execute authentication query: {}", e);
+                e.to_string()
+            })?;
+
+        Ok(count > 0)
+    }
+
+    // Add this in the Database impl block
+    pub fn get_credentials(&self) -> Result<Credentials, String> {
+        info!("Fetching credentials");
+        let conn = self.conn.read().map_err(|e| {
+            error!("Failed to acquire database lock: {}", e);
+            e.to_string()
+        })?;
+
+        let mut stmt = conn.prepare(
+            "SELECT username, password FROM users LIMIT 1"
+        ).map_err(|e| {
+            error!("Failed to prepare get credentials statement: {}", e);
+            e.to_string()
+        })?;
+
+        let result = stmt.query_row([], |row| {
+            Ok(Credentials {
+                username: row.get(0)?,
+                password: row.get(1)?,
+            })
+        }).map_err(|e| {
+            error!("Failed to fetch credentials: {}", e);
+            e.to_string()
+        })?;
+
+        Ok(result)
+    }
+
 
     pub fn get_note(&self, id: i64) -> Result<Note, String> {
         info!("Fetching note with id: {}", id);

@@ -33,7 +33,7 @@ pub async fn start_network_monitoring(app: tauri::AppHandle) {
             app.emit("network-status", status).unwrap();
             
             // Wait for 10 seconds before next check
-            sleep(Duration::from_secs(10)).await;
+            sleep(Duration::from_secs(1000)).await;
         }
     });
 }
