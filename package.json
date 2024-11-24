@@ -35,5 +35,8 @@
     "tailwindcss": "^3.4.15",
     "typescript": "^5.2.2",
     "vite": "^5.3.1"
+  },
+  "tauri": {
+    "target": "i686-pc-windows-msvc"
   }
 }

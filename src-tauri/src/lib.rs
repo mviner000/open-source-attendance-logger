@@ -1,11 +1,14 @@
-// lib.rs
 mod db;
 mod network;
+mod first_launch;
 
 use tauri::Manager;
-use db::{Database, Note, CreateNoteRequest, UpdateNoteRequest, Credentials};
+use db::{Database, init_db, DatabaseInfo};
+use db::notes::{Note, CreateNoteRequest, UpdateNoteRequest};
+use db::auth::Credentials;
 use rusqlite::Result;
 use network::{start_network_monitoring, check_network};
+use first_launch::handle_first_launch;
 
 pub struct DbState(pub Database);
 
@@ -13,6 +16,12 @@ pub struct DbState(pub Database);
 unsafe impl Send for DbState {}
 unsafe impl Sync for DbState {}
 
+#[tauri::command]
+async fn get_database_info(
+    state: tauri::State<'_, DbState>
+) -> Result<DatabaseInfo, String> {
+    state.0.get_database_info().map_err(|e| e.to_string())
+}
 
 #[tauri::command]
 async fn authenticate(
@@ -20,10 +29,12 @@ async fn authenticate(
     username: String,
     password: String
 ) -> Result<bool, String> {
-    state.0.authenticate(&username, &password)
+    state.0.get_connection()
+        .read()
+        .map_err(|e| e.to_string())
+        .and_then(|conn| state.0.auth.authenticate(&conn, &username, &password))
 }
 
-// Create a new note with authentication
 #[tauri::command]
 async fn create_note(
     state: tauri::State<'_, DbState>,
@@ -31,31 +42,36 @@ async fn create_note(
     username: String,
     password: String
 ) -> Result<Note, String> {
-    if state.0.authenticate(&username, &password)? {
-        state.0.create_note(note)
+    let conn = state.0.get_connection().write().map_err(|e| e.to_string())?;
+    
+    if state.0.auth.authenticate(&conn, &username, &password)? {
+        state.0.notes.create_note(&conn, note)
     } else {
         Err("Authentication failed".to_string())
     }
 }
 
-// Get all notes (no auth needed for reading)
 #[tauri::command]
 async fn get_all_notes(
     state: tauri::State<'_, DbState>
 ) -> Result<Vec<Note>, String> {
-    state.0.get_all_notes()
+    state.0.get_connection()
+        .read()
+        .map_err(|e| e.to_string())
+        .and_then(|conn| state.0.notes.get_all_notes(&conn))
 }
 
-// Get a single note (no auth needed for reading)
 #[tauri::command]
 async fn get_note(
     state: tauri::State<'_, DbState>,
     id: i64
 ) -> Result<Note, String> {
-    state.0.get_note(id)
+    state.0.get_connection()
+        .read()
+        .map_err(|e| e.to_string())
+        .and_then(|conn| state.0.notes.get_note(&conn, id))
 }
 
-// Update a note with authentication
 #[tauri::command]
 async fn update_note(
     state: tauri::State<'_, DbState>,
@@ -64,14 +80,15 @@ async fn update_note(
     username: String,
     password: String
 ) -> Result<Note, String> {
-    if state.0.authenticate(&username, &password)? {
-        state.0.update_note(id, note)
+    let conn = state.0.get_connection().write().map_err(|e| e.to_string())?;
+    
+    if state.0.auth.authenticate(&conn, &username, &password)? {
+        state.0.notes.update_note(&conn, id, note)
     } else {
         Err("Authentication failed".to_string())
     }
 }
 
-// Delete a note with authentication
 #[tauri::command]
 async fn delete_note(
     state: tauri::State<'_, DbState>,
@@ -79,28 +96,34 @@ async fn delete_note(
     username: String,
     password: String
 ) -> Result<(), String> {
-    if state.0.authenticate(&username, &password)? {
-        state.0.delete_note(id)
+    let conn = state.0.get_connection().write().map_err(|e| e.to_string())?;
+    
+    if state.0.auth.authenticate(&conn, &username, &password)? {
+        state.0.notes.delete_note(&conn, id)
     } else {
         Err("Authentication failed".to_string())
     }
 }
 
-// Search notes (no auth needed for reading)
 #[tauri::command]
 async fn search_notes(
     state: tauri::State<'_, DbState>,
     query: String
 ) -> Result<Vec<Note>, String> {
-    state.0.search_notes(&query)
+    state.0.get_connection()
+        .read()
+        .map_err(|e| e.to_string())
+        .and_then(|conn| state.0.notes.search_notes(&conn, &query))
 }
 
-// Add this new command
 #[tauri::command]
 async fn get_credentials(
     state: tauri::State<'_, DbState>,
 ) -> Result<Credentials, String> {
-    state.0.get_credentials()
+    state.0.get_connection()
+        .read()
+        .map_err(|e| e.to_string())
+        .and_then(|conn| state.0.auth.get_credentials(&conn))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -111,8 +134,12 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
+            // Handle first launch (installer credentials)
+            handle_first_launch(&app.handle())
+                .expect("Failed to handle first launch");
+
             // Initialize database
-            let db = db::init_db(app.handle())
+            let db = init_db(app.handle())
                 .expect("Failed to initialize database");
             app.manage(DbState(db));
 
@@ -133,7 +160,8 @@ pub fn run() {
             delete_note,
             search_notes,
             check_network,
-            get_credentials
+            get_credentials,
+            get_database_info
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
