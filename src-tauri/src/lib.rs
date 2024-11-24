@@ -1,6 +1,9 @@
+// src/lib.rs
+
 mod db;
 mod network;
 mod first_launch;
+mod config;
 
 use tauri::Manager;
 use db::{Database, init_db, DatabaseInfo};
@@ -9,6 +12,9 @@ use db::auth::Credentials;
 use rusqlite::Result;
 use network::{start_network_monitoring, check_network};
 use first_launch::handle_first_launch;
+
+// Re-export config items that need to be public
+pub use crate::config::{Config, DatabaseConfig}; 
 
 pub struct DbState(pub Database);
 

@@ -1,8 +1,9 @@
-// db.rs
-use log::info;
+// src/db.rs
+
+use log::{info, warn};
 use rusqlite::{Connection, Result};
 use std::sync::RwLock;
-use tauri::AppHandle;  // Removed unused Manager import
+use tauri::AppHandle;
 use serde::Serialize;
 use std::path::PathBuf;
 use directories::UserDirs;
@@ -11,9 +12,9 @@ pub mod notes;
 pub mod auth;
 use notes::NotesDatabase;
 use auth::AuthDatabase;
+use crate::config::{self, Config};
 
 const APP_NAME: &str = "nameOftheApp";
-const DB_FILENAME: &str = "notes.db";
 
 #[derive(Debug, Serialize)]
 pub struct DatabaseInfo {
@@ -29,10 +30,10 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn new(_app_handle: &AppHandle) -> Result<Self> {  // Added underscore to unused parameter
+    pub fn new(_app_handle: &AppHandle) -> Result<Self> {
         info!("Initializing database...");
         
-        // Get the database directory path based on the platform
+        // Get the database directory path
         let db_dir = get_database_dir()
             .expect("Failed to determine database directory");
             
@@ -40,7 +41,23 @@ impl Database {
         std::fs::create_dir_all(&db_dir)
             .expect("Failed to create database directory");
 
-        let db_path = db_dir.join(DB_FILENAME);
+        // Try to get database configuration
+        let db_path = match get_database_path(&db_dir) {
+            Ok(path) => path,
+            Err(e) => {
+                // If there's an error getting the database path, try loading config again
+                warn!("Initial database path error: {}. Retrying config load...", e);
+                match config::load_config() {
+                    Ok(config) => db_dir.join(format!("{}.db", config.database.database_name)),
+                    Err(e) => {
+                        return Err(rusqlite::Error::InvalidParameterName(
+                            format!("Could not determine database path: {}", e)
+                        ));
+                    }
+                }
+            }
+        };
+
         info!("Opening database at {:?}", db_path);
         
         let conn = Connection::open(&db_path)?;
@@ -76,6 +93,14 @@ impl Database {
             .to_string();
 
         Ok(DatabaseInfo { name, path })
+    }
+}
+
+// Helper function to get the database path based on config
+fn get_database_path(db_dir: &PathBuf) -> std::result::Result<PathBuf, String> {
+    match config::load_config() {
+        Ok(config) => Ok(db_dir.join(format!("{}.db", config.database.database_name))),
+        Err(e) => Err(e)
     }
 }
 

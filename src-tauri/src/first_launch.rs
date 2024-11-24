@@ -1,40 +1,32 @@
 // src/first_launch.rs
+
 use std::fs;
 use std::path::PathBuf;
-use quick_xml::de::from_str;
 use log::{info, error};
 use rusqlite::Connection;
 use tauri::AppHandle;
-use crate::db::auth::{AuthDatabase, Credentials};
+use crate::db::auth::{AuthDatabase, Credentials as AuthCredentials};
+use crate::config::{self, Config};
 use directories::UserDirs;
 
-const CREDENTIALS_FILE: &str = "credentials.xml";
 const APP_NAME: &str = "nameOftheApp";
 
 pub fn handle_first_launch(app_handle: &AppHandle) -> Result<(), String> {
-    info!("Checking for first launch credentials...");
+    info!("Checking for first launch configuration...");
     
-    // Get credentials file path
-    let credentials_path = get_credentials_file_path()
-        .ok_or_else(|| "Failed to determine credentials file path".to_string())?;
+    // Load configuration
+    let config = match config::load_config() {
+        Ok(config) => config,
+        Err(e) => {
+            info!("No config file found or error loading: {}", e);
+            return Ok(());
+        }
+    };
 
-    // If credentials file doesn't exist, return early
-    if !credentials_path.exists() {
-        info!("No credentials file found");
-        return Ok(());
-    }
-
-    info!("Found credentials file, attempting to process...");
-
-    // Read and parse credentials
-    let credentials_str = fs::read_to_string(&credentials_path)
-        .map_err(|e| format!("Failed to read credentials file: {}", e))?;
-
-    let credentials: Credentials = from_str(&credentials_str)
-        .map_err(|e| format!("Failed to parse credentials XML: {}", e))?;
+    info!("Found config file, attempting to process...");
 
     // Get database connection
-    let db_path = get_database_path()
+    let db_path = get_database_path(&config.database.database_name)
         .ok_or_else(|| "Failed to determine database path".to_string())?;
 
     let conn = Connection::open(&db_path)
@@ -45,40 +37,57 @@ pub fn handle_first_launch(app_handle: &AppHandle) -> Result<(), String> {
 
     // Check if any users exist
     if !auth_db.user_exists(&conn)? {
-        info!("No existing users found, creating new user from credentials file");
+        info!("No existing users found, creating new user from config file");
+        
+        // Convert config credentials to AuthCredentials
+        let auth_credentials = convert_credentials(&config);
         
         // Create the new user
-        auth_db.create_user(&conn, &credentials)?;
-        info!("Successfully created user from credentials file");
+        auth_db.create_user(&conn, &auth_credentials)?;
+        info!("Successfully created user from config file");
 
-        // Delete the credentials file
-        fs::remove_file(&credentials_path)
-            .map_err(|e| format!("Failed to delete credentials file: {}", e))?;
-
-        info!("Credentials file deleted");
+        // Delete the config file
+        if let Some(config_path) = config::get_config_file_path() {
+            if let Err(e) = fs::remove_file(&config_path) {
+                error!("Failed to delete config file: {}", e);
+            } else {
+                info!("Config file deleted successfully");
+            }
+        }
     } else {
         info!("Users already exist, skipping credential import");
-        // Delete the credentials file even if we didn't use it
-        if let Err(e) = fs::remove_file(&credentials_path) {
-            error!("Failed to delete unused credentials file: {}", e);
+        // Delete the config file even if we didn't use it
+        if let Some(config_path) = config::get_config_file_path() {
+            if let Err(e) = fs::remove_file(&config_path) {
+                error!("Failed to delete unused config file: {}", e);
+            }
         }
     }
 
     Ok(())
 }
 
-fn get_credentials_file_path() -> Option<PathBuf> {
-    UserDirs::new().and_then(|user_dirs| {
-        user_dirs.document_dir().map(|documents_dir| {
-            documents_dir.join(APP_NAME).join(CREDENTIALS_FILE)
-        })
-    })
+// Helper function to convert between credential types
+fn convert_credentials(config: &Config) -> AuthCredentials {
+    AuthCredentials {
+        username: config.username.clone(),
+        password: config.password.clone(),
+    }
 }
 
-fn get_database_path() -> Option<PathBuf> {
+fn get_database_path(db_name: &str) -> Option<PathBuf> {
     UserDirs::new().and_then(|user_dirs| {
         user_dirs.document_dir().map(|documents_dir| {
-            documents_dir.join(APP_NAME).join("notes.db")
+            let db_path = documents_dir
+                .join(APP_NAME)
+                .join(format!("{}.db", db_name));
+            
+            // Ensure the directory exists
+            if let Some(parent) = db_path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            
+            db_path
         })
     })
 }
