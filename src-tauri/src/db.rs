@@ -33,7 +33,6 @@ impl Database {
     pub fn new(_app_handle: &AppHandle) -> Result<Self> {
         info!("Initializing database...");
         
-        // Get the database directory path
         let db_dir = get_database_dir()
             .expect("Failed to determine database directory");
             
@@ -41,20 +40,13 @@ impl Database {
         std::fs::create_dir_all(&db_dir)
             .expect("Failed to create database directory");
 
-        // Try to get database configuration
         let db_path = match get_database_path(&db_dir) {
             Ok(path) => path,
             Err(e) => {
-                // If there's an error getting the database path, try loading config again
-                warn!("Initial database path error: {}. Retrying config load...", e);
-                match config::load_config() {
-                    Ok(config) => db_dir.join(format!("{}.db", config.database.database_name)),
-                    Err(e) => {
-                        return Err(rusqlite::Error::InvalidParameterName(
-                            format!("Could not determine database path: {}", e)
-                        ));
-                    }
-                }
+                warn!("Database path error: {}. Retrying config load...", e);
+                return Err(rusqlite::Error::InvalidParameterName(
+                    format!("Could not determine database path: {}", e)
+                ));
             }
         };
 
@@ -62,7 +54,6 @@ impl Database {
         
         let conn = Connection::open(&db_path)?;
 
-        // Initialize database tables
         let notes_db = NotesDatabase::init(&conn)?;
         let auth_db = AuthDatabase::init(&conn)?;
 
@@ -96,12 +87,10 @@ impl Database {
     }
 }
 
-// Helper function to get the database path based on config
-fn get_database_path(db_dir: &PathBuf) -> std::result::Result<PathBuf, String> {
-    match config::load_config() {
-        Ok(config) => Ok(db_dir.join(format!("{}.db", config.database.database_name))),
-        Err(e) => Err(e)
-    }
+// Helper function to get the database path
+fn get_database_path(db_dir: &PathBuf) -> Result<PathBuf, String> {
+    let db_name = config::load_database_name()?; // Load from database_name.txt
+    Ok(db_dir.join(format!("{}.db", db_name)))
 }
 
 fn get_database_dir() -> Option<PathBuf> {
