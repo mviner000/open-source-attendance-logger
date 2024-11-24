@@ -13,6 +13,7 @@ pub mod auth;
 use notes::NotesDatabase;
 use auth::AuthDatabase;
 use crate::config::{self, Config};
+use crate::storage::AppStorage;
 
 const APP_NAME: &str = "nameOftheApp";
 
@@ -94,25 +95,7 @@ fn get_database_path(db_dir: &PathBuf) -> Result<PathBuf, String> {
 }
 
 fn get_database_dir() -> Option<PathBuf> {
-    if let Some(user_dirs) = UserDirs::new() {
-        let documents_dir = user_dirs.document_dir()?;
-        let app_dir = documents_dir.join(APP_NAME);
-        
-        // Platform-specific handling
-        #[cfg(target_os = "macos")]
-        return Some(app_dir);
-        
-        #[cfg(target_os = "linux")]
-        return Some(app_dir);
-        
-        #[cfg(target_os = "windows")]
-        return Some(app_dir);
-        
-        // Fallback for any other platform
-        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-        return Some(app_dir);
-    }
-    None
+    AppStorage::new().map(|storage| storage.get_database_dir())
 }
 
 pub fn init_db(app_handle: &AppHandle) -> Result<Database> {

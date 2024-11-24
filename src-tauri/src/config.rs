@@ -1,3 +1,5 @@
+// src/config.rs
+use crate::storage::AppStorage;
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
@@ -62,14 +64,20 @@ pub fn get_config_file_path() -> Option<PathBuf> {
 
 // Save the database name to a text file
 pub fn save_database_name(database_name: &str) -> Result<(), String> {
-    let path = get_app_dir().join(DATABASE_NAME_FILE);
+    let storage = AppStorage::new()
+        .ok_or_else(|| "Failed to initialize app storage".to_string())?;
+    
+    let path = storage.get_database_name_file_path();
     fs::write(&path, database_name)
         .map_err(|e| format!("Failed to save database name: {}", e))
 }
 
 // Load the database name from a text file
 pub fn load_database_name() -> Result<String, String> {
-    let path = get_app_dir().join(DATABASE_NAME_FILE);
+    let storage = AppStorage::new()
+        .ok_or_else(|| "Failed to initialize app storage".to_string())?;
+    
+    let path = storage.get_database_name_file_path();
     fs::read_to_string(&path)
         .map(|s| s.trim().to_string())
         .map_err(|e| format!("Failed to read database name: {}", e))
@@ -77,7 +85,9 @@ pub fn load_database_name() -> Result<String, String> {
 
 // Check if database_name.txt exists
 pub fn database_name_file_exists() -> bool {
-    get_app_dir().join(DATABASE_NAME_FILE).exists()
+    AppStorage::new()
+        .map(|storage| storage.get_database_name_file_path().exists())
+        .unwrap_or(false)
 }
 
 // Utility to get the application directory path

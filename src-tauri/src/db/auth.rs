@@ -1,5 +1,5 @@
 // src/db/auth.rs
-use log::info;
+use log::{info, error};
 use rusqlite::{Connection, Result as SqliteResult, params};
 use serde::{Serialize, Deserialize};
 
@@ -56,12 +56,25 @@ impl AuthDatabase {
 
     pub fn create_user(&self, conn: &Connection, credentials: &Credentials) -> Result<(), String> {
         info!("Creating new user: {}", credentials.username);
-        conn.execute(
+        
+        // Log the current users before insertion
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM users", [], |row| row.get(0))
+            .map_err(|e| format!("Failed to count users: {}", e))?;
+        info!("Current user count before insertion: {}", count);
+        
+        match conn.execute(
             "INSERT INTO users (username, password) VALUES (?, ?)",
             params![credentials.username, credentials.password],
-        ).map_err(|e| format!("Failed to create user: {}", e))?;
-
-        Ok(())
+        ) {
+            Ok(_) => {
+                info!("Successfully created user in database");
+                Ok(())
+            },
+            Err(e) => {
+                error!("Failed to create user: {}", e);
+                Err(format!("Failed to create user: {}", e))
+            }
+        }
     }
 
     pub fn user_exists(&self, conn: &Connection) -> Result<bool, String> {

@@ -1,9 +1,9 @@
 // src/lib.rs
-
 mod db;
 mod network;
 mod first_launch;
 mod config;
+mod storage;
 
 use tauri::Manager;
 use db::{Database, init_db, DatabaseInfo};
@@ -12,6 +12,8 @@ use db::auth::Credentials;
 use rusqlite::Result;
 use network::{start_network_monitoring, check_network};
 use first_launch::handle_first_launch;
+use log::error;
+use storage::AppStorage;
 
 // Re-export config items that need to be public
 pub use crate::config::{Config, DatabaseConfig}; 
@@ -134,19 +136,42 @@ async fn get_credentials(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Initialize logging
+    // Initialize logging first
     env_logger::init();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            // Handle first launch (installer credentials)
-            handle_first_launch(&app.handle())
-                .expect("Failed to handle first launch");
+            // Initialize storage first
+            if let Some(storage) = AppStorage::new() {
+                if let Err(e) = storage.initialize() {
+                    error!("Failed to initialize storage directories: {}", e);
+                    return Ok(());
+                }
+            } else {
+                error!("Failed to create storage instance");
+                return Ok(());
+            }
+
+            // Handle first launch (installer credentials) with better error handling
+            match handle_first_launch(&app.handle()) {
+                Ok(_) => (),
+                Err(e) => {
+                    error!("Failed to handle first launch: {}", e);
+                    return Ok(());
+                }
+            }
 
             // Initialize database
-            let db = init_db(app.handle())
-                .expect("Failed to initialize database");
+            let db = match init_db(&app.handle()) {
+                Ok(db) => db,
+                Err(e) => {
+                    error!("Failed to initialize database: {}", e);
+                    return Ok(());
+                }
+            };
+            
+            // Manage database state
             app.manage(DbState(db));
 
             // Start network monitoring
