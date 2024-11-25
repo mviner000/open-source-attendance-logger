@@ -1,1 +1,7 @@
-bun tauri build --target i686-pc-windows-msvc
+=== Installation Started ===
+Executable installed: C:\Program Files (x86)\yourorg\nameOftheApp\Sample2.exe
+Start Menu Shortcut created: C:\Users\user\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\nameOftheApp\nameOftheApp.lnk
+Desktop Shortcut Creation Skipped
+Uninstaller created: C:\Program Files (x86)\yourorg\nameOftheApp\uninstall.exe
+Registry entries written for nameOftheApp
+=== Installation Completed ===
