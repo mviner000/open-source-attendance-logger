@@ -4,6 +4,9 @@ use uuid::Uuid;
 use rusqlite::{params, Connection, Result};
 use serde::{Serialize, Deserialize};
 use serde::Deserializer;
+use log::{info, error};
+use rusqlite::Result as SqlResult;
+
 
 // Enum for gender choices
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -11,6 +14,16 @@ pub enum Gender {
     Male,
     Female,
     Other,
+}
+
+// Enum for last updated semesters
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum Semester {
+    FirstSem2024_2025,
+    SecondSem2024_2025,
+    FirstSem2025_2026,
+    SecondSem2025_2026,
+    None,
 }
 
 // Struct representing the School Account
@@ -27,6 +40,8 @@ pub struct SchoolAccount {
     pub position: Option<String>,
     pub major: Option<String>,
     pub year_level: Option<String>,
+    pub is_active: bool,
+    pub last_updated: Option<Semester>,
 }
 
 // Create Request Struct
@@ -42,6 +57,10 @@ pub struct CreateSchoolAccountRequest {
     pub position: Option<String>,
     pub major: Option<String>,
     pub year_level: Option<String>,
+    #[serde(default = "default_is_active")]
+    pub is_active: bool,
+    #[serde(default)]
+    pub last_updated: Option<Semester>,
 }
 
 // Update Request Struct
@@ -57,6 +76,14 @@ pub struct UpdateSchoolAccountRequest {
     pub position: Option<String>,
     pub major: Option<String>,
     pub year_level: Option<String>,
+    pub is_active: Option<bool>,
+    #[serde(deserialize_with = "deserialize_semester", default)]
+    pub last_updated: Option<Semester>,
+}
+
+// Default function for is_active
+fn default_is_active() -> bool {
+    true
 }
 
 // Trait for SchoolAccount Database Operations
@@ -108,44 +135,177 @@ where
     })
 }
 
+fn deserialize_semester<'de, D>(deserializer: D) -> Result<Option<Semester>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(match value {
+        serde_json::Value::String(s) => Some(match s.as_str() {
+            "FirstSem2024_2025" => Semester::FirstSem2024_2025,
+            "SecondSem2024_2025" => Semester::SecondSem2024_2025,
+            "FirstSem2025_2026" => Semester::FirstSem2025_2026,
+            "SecondSem2025_2026" => Semester::SecondSem2025_2026,
+            _ => Semester::None,
+        }),
+        serde_json::Value::Number(n) => {
+            let semester = n.as_i64().unwrap_or(4);
+            Some(match semester {
+                0 => Semester::FirstSem2024_2025,
+                1 => Semester::SecondSem2024_2025,
+                2 => Semester::FirstSem2025_2026,
+                3 => Semester::SecondSem2025_2026,
+                _ => Semester::None,
+            })
+        }
+        _ => None,
+    })
+}
+
+
+
+// Optional helper function for logging (if needed separately)
+fn log_school_account_creation_attempt(
+    account: &CreateSchoolAccountRequest, 
+    result: &Result<SchoolAccount>
+) {
+    match result {
+        Ok(created_account) => {
+            info!(
+                "School Account Created Successfully: ID={}, SchoolID={}, Name={} {}",
+                created_account.id,
+                created_account.school_id,
+                created_account.first_name.clone().unwrap_or_default(),
+                created_account.last_name.clone().unwrap_or_default()
+            );
+        },
+        Err(e) => {
+            error!(
+                "School Account Creation Failed: SchoolID={}, Error={:?}", 
+                account.school_id, 
+                e
+            );
+        }
+    }
+}
+
 // Implement the repository for a specific database type (e.g., SQLite)
 impl SchoolAccountRepository for SqliteSchoolAccountRepository {
     fn create_school_account(&self, conn: &Connection, account: CreateSchoolAccountRequest) -> Result<SchoolAccount> {
+        // Generate a new UUID for the account
         let id = Uuid::new_v4();
         
-        conn.execute(
+        // Log the attempt to create a new school account
+        info!("Attempting to create school account for school ID: {}", account.school_id);
+
+        // Validate required fields
+        if account.school_id.is_empty() {
+            error!("Failed to create school account: School ID is required");
+            let err = rusqlite::Error::InvalidParameterName(
+                "School ID cannot be empty".to_string()
+            );
+            
+            // Log the error
+            error!("School Account Creation Failed: SchoolID={}, Error={:?}", 
+                account.school_id, 
+                err
+            );
+            
+            return Err(err);
+        }
+
+        // Attempt to execute the database insertion
+        let result = conn.execute(
             "INSERT INTO school_accounts (
                 id, school_id, first_name, middle_name, last_name, 
-                gender, course, department, position, major, year_level
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                gender, course, department, position, major, year_level, is_active, last_updated
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 id.to_string(), 
                 account.school_id, 
                 account.first_name, 
                 account.middle_name, 
                 account.last_name,
-                account.gender.as_ref().map(|g| g.clone() as i32), // Clone the Gender
+                account.gender.as_ref().map(|g| g.clone() as i32), 
                 account.course, 
                 account.department, 
                 account.position, 
                 account.major, 
-                account.year_level
+                account.year_level,
+                account.is_active,
+                account.last_updated.clone().map(|s| match s {
+                    Semester::FirstSem2024_2025 => 0,
+                    Semester::SecondSem2024_2025 => 1,
+                    Semester::FirstSem2025_2026 => 2,
+                    Semester::SecondSem2025_2026 => 3,
+                    Semester::None => 4,
+                })
             ],
-        )?;
-    
-        Ok(SchoolAccount {
-            id,
-            school_id: account.school_id,
-            first_name: account.first_name,
-            middle_name: account.middle_name,
-            last_name: account.last_name,
-            gender: account.gender.clone(), // Clone the entire Option
-            course: account.course,
-            department: account.department,
-            position: account.position,
-            major: account.major,
-            year_level: account.year_level,
-        })
+        );
+
+        // Handle potential database insertion errors
+        match result {
+            Ok(_) => {
+                // Create the SchoolAccount struct
+                let created_account = SchoolAccount {
+                    id,
+                    school_id: account.school_id,
+                    first_name: account.first_name,
+                    middle_name: account.middle_name,
+                    last_name: account.last_name,
+                    gender: account.gender.clone(),
+                    course: account.course,
+                    department: account.department,
+                    position: account.position,
+                    major: account.major,
+                    year_level: account.year_level,
+                    is_active: account.is_active,
+                    last_updated: account.last_updated.clone(),
+                };
+
+                // Log successful creation
+                info!(
+                    "School Account Created Successfully: ID={}, SchoolID={}, Name={} {}",
+                    created_account.id,
+                    created_account.school_id,
+                    created_account.first_name.clone().unwrap_or_default(),
+                    created_account.last_name.clone().unwrap_or_default()
+                );
+
+                Ok(created_account)
+            },
+            Err(e) => {
+                // Log different types of errors with appropriate severity
+                match &e {
+                    rusqlite::Error::SqliteFailure(error, message) => {
+                        if error.code == rusqlite::ErrorCode::ConstraintViolation {
+                            error!(
+                                "Constraint violation when creating school account for school ID {}: {:?} {}",
+                                account.school_id, 
+                                error, 
+                                message.as_ref().cloned().unwrap_or_else(|| "Unknown constraint violated".to_string())
+                            );
+                        } else {
+                            error!(
+                                "SQLite error when creating school account for school ID {}: {:?} {}",
+                                account.school_id, 
+                                error, 
+                                message.as_ref().cloned().unwrap_or_else(|| "Unknown error".to_string())
+                            );
+                        }
+                        Err(e)
+                    },
+                    _ => {
+                        error!(
+                            "Unexpected error when creating school account for school ID {}: {:?}",
+                            account.school_id, 
+                            e
+                        );
+                        Err(e)
+                    }
+                }
+            }
+        }
     }
 
     fn search_school_accounts(&self, conn: &Connection, query: &str) -> Result<Vec<SchoolAccount>> {
@@ -180,6 +340,14 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
                 position: row.get(8)?,
                 major: row.get(9)?,
                 year_level: row.get(10)?,
+                is_active: row.get(11)?,
+                last_updated: row.get::<_, Option<i32>>(12)?.map(|s| match s {
+                    0 => Semester::FirstSem2024_2025,
+                    1 => Semester::SecondSem2024_2025,
+                    2 => Semester::FirstSem2025_2026,
+                    3 => Semester::SecondSem2025_2026,
+                    _ => Semester::None,
+                }),
             })
         })?;
     
@@ -212,6 +380,14 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
                     position: row.get(8)?,
                     major: row.get(9)?,
                     year_level: row.get(10)?,
+                    is_active: row.get(11)?,
+                    last_updated: row.get::<_, Option<i32>>(12)?.map(|s| match s {
+                        0 => Semester::FirstSem2024_2025,
+                        1 => Semester::SecondSem2024_2025,
+                        2 => Semester::FirstSem2025_2026,
+                        3 => Semester::SecondSem2025_2026,
+                        _ => Semester::None,
+                    }),
                 })
             },
         )?;
@@ -240,6 +416,14 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
                     position: row.get(8)?,
                     major: row.get(9)?,
                     year_level: row.get(10)?,
+                    is_active: row.get(11)?,
+                    last_updated: row.get::<_, Option<i32>>(12)?.map(|s| match s {
+                        0 => Semester::FirstSem2024_2025,
+                        1 => Semester::SecondSem2024_2025,
+                        2 => Semester::FirstSem2025_2026,
+                        3 => Semester::SecondSem2025_2026,
+                        _ => Semester::None,
+                    }),
                 })
             },
         )?;
@@ -248,39 +432,49 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
     }
 
     fn update_school_account(&self, conn: &Connection, id: Uuid, account: UpdateSchoolAccountRequest) -> Result<SchoolAccount> {
-    conn.execute(
-        "UPDATE school_accounts SET 
-            first_name = COALESCE(?1, first_name), 
-            middle_name = COALESCE(?2, middle_name), 
-            last_name = COALESCE(?3, last_name), 
-            gender = COALESCE(?4, gender), 
-            course = COALESCE(?5, course), 
-            department = COALESCE(?6, department), 
-            position = COALESCE(?7, position), 
-            major = COALESCE(?8, major), 
-            year_level = COALESCE(?9, year_level) 
-        WHERE id = ?10",
-        params![
-            account.first_name, 
-            account.middle_name, 
-            account.last_name,
-            account.gender.map(|g| match g {
-                Gender::Male => 0,
-                Gender::Female => 1,
-                Gender::Other => 2
-            }), 
-            account.course, 
-            account.department, 
-            account.position, 
-            account.major, 
-            account.year_level,
-            id.to_string()
-        ],
-    )?;
-
-    // Retrieve the updated account
-    self.get_school_account(conn, id)
-}
+        conn.execute(
+            "UPDATE school_accounts SET 
+                first_name = COALESCE(?1, first_name), 
+                middle_name = COALESCE(?2, middle_name), 
+                last_name = COALESCE(?3, last_name), 
+                gender = COALESCE(?4, gender), 
+                course = COALESCE(?5, course), 
+                department = COALESCE(?6, department), 
+                position = COALESCE(?7, position), 
+                major = COALESCE(?8, major), 
+                year_level = COALESCE(?9, year_level),
+                is_active = COALESCE(?10, is_active),
+                last_updated = COALESCE(?11, last_updated)
+            WHERE id = ?12",
+            params![
+                account.first_name, 
+                account.middle_name, 
+                account.last_name,
+                account.gender.map(|g| match g {
+                    Gender::Male => 0,
+                    Gender::Female => 1,
+                    Gender::Other => 2
+                }), 
+                account.course, 
+                account.department, 
+                account.position, 
+                account.major, 
+                account.year_level,
+                account.is_active,
+                account.last_updated.clone().map(|s| match s {
+                    Semester::FirstSem2024_2025 => 0,
+                    Semester::SecondSem2024_2025 => 1,
+                    Semester::FirstSem2025_2026 => 2,
+                    Semester::SecondSem2025_2026 => 3,
+                    Semester::None => 4,
+                }),
+                id.to_string()
+            ],
+        )?;
+    
+        // Retrieve the updated account
+        self.get_school_account(conn, id)
+    }
 
     fn delete_school_account(&self, conn: &Connection, id: Uuid) -> Result<()> {
         conn.execute(
@@ -310,23 +504,46 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
                 position: row.get(8)?,
                 major: row.get(9)?,
                 year_level: row.get(10)?,
+                is_active: row.get(11)?,
+                last_updated: row.get::<_, Option<i32>>(12)?.map(|s| match s {
+                    0 => Semester::FirstSem2024_2025,
+                    1 => Semester::SecondSem2024_2025,
+                    2 => Semester::FirstSem2025_2026,
+                    3 => Semester::SecondSem2025_2026,
+                    _ => Semester::None,
+                }),
             })
         })?;
-
+    
         let mut accounts = Vec::new();
         for account in account_iter {
             accounts.push(account?);
         }
-
+    
         Ok(accounts)
     }
 }
 
 
-// SQL to create the table (for reference)
-pub fn create_school_accounts_table(conn: &Connection) -> Result<()> {
+// SQL to create the table with all required columns
+pub fn create_school_accounts_table(conn: &Connection) -> SqlResult<()> {
+    // First, check if table exists
+    let table_exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='school_accounts'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if table_exists {
+        // Drop the existing table to recreate with correct schema
+        conn.execute("DROP TABLE school_accounts", [])?;
+    }
+
+    // Create the table with all required columns
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS school_accounts (
+        "CREATE TABLE school_accounts (
             id TEXT PRIMARY KEY,
             school_id TEXT UNIQUE NOT NULL,
             first_name TEXT,
@@ -337,9 +554,13 @@ pub fn create_school_accounts_table(conn: &Connection) -> Result<()> {
             department TEXT,
             position TEXT,
             major TEXT,
-            year_level TEXT
+            year_level TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            last_updated INTEGER,
+            CONSTRAINT school_id_unique UNIQUE (school_id)
         )",
         [],
     )?;
+
     Ok(())
 }
