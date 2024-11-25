@@ -13,14 +13,14 @@ pub fn handle_first_launch(app_handle: &AppHandle) -> Result<(), String> {
     // Get storage instance
     let storage = AppStorage::new()
         .ok_or_else(|| "Failed to initialize app storage".to_string())?;
-
+    
     // Initialize storage directories
     storage.initialize()
         .map_err(|e| format!("Failed to initialize storage directories: {}", e))?;
-
+    
     // Load config first since we'll need it in both cases
     let config = config::load_config()?;
-
+    
     // Check if database_name.txt already exists
     if let Ok(db_name) = config::load_database_name() {
         info!("Found existing database_name.txt: using database '{}'", db_name);
@@ -33,7 +33,7 @@ pub fn handle_first_launch(app_handle: &AppHandle) -> Result<(), String> {
         // Initialize auth database
         let auth_db = AuthDatabase::init(&conn)
             .map_err(|e| format!("Failed to initialize auth database: {}", e))?;
-
+        
         // Check if users exist and create if they don't
         if !auth_db.user_exists(&conn)? {
             info!("No existing users found in existing database, creating new user from config file");
@@ -41,14 +41,12 @@ pub fn handle_first_launch(app_handle: &AppHandle) -> Result<(), String> {
                 username: config.username.clone(),
                 password: config.password.clone(),
             };
-            
             auth_db.create_user(&conn, &auth_credentials)?;
             info!("Successfully created user in existing database");
         }
-        
         return Ok(());
     }
-
+    
     // If database_name.txt doesn't exist, proceed with new database setup
     info!("No database_name.txt found, creating new database setup");
     
@@ -65,7 +63,7 @@ pub fn handle_first_launch(app_handle: &AppHandle) -> Result<(), String> {
     // Initialize auth database
     let auth_db = AuthDatabase::init(&conn)
         .map_err(|e| format!("Failed to initialize auth database: {}", e))?;
-
+    
     // Create the initial user
     info!("Creating initial user in new database");
     let auth_credentials = AuthCredentials {
@@ -77,13 +75,13 @@ pub fn handle_first_launch(app_handle: &AppHandle) -> Result<(), String> {
     auth_db.create_user(&conn, &auth_credentials)?;
     info!("Successfully created initial user");
     
-    // Delete config file if present
-    if let Some(config_path) = config::get_config_file_path() {
-        if config_path.exists() {
-            fs::remove_file(&config_path)
-                .map_err(|e| format!("Failed to delete config file: {}", e))?;
-        }
+    // Delete config file using the storage instance
+    let config_path = storage.get_config_file_path();
+    if config_path.exists() {
+        fs::remove_file(&config_path)
+            .map_err(|e| format!("Failed to delete config file: {}", e))?;
+        info!("Successfully deleted config file after initial setup");
     }
-
+    
     Ok(())
 }

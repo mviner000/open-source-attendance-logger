@@ -3,7 +3,6 @@ use crate::storage::AppStorage;
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
-use directories::UserDirs;
 use quick_xml::de::from_str;
 
 const APP_NAME: &str = "nameOftheApp";
@@ -26,43 +25,33 @@ pub struct DatabaseConfig {
 
 impl DatabaseConfig {
     pub fn get_database_path(&self) -> PathBuf {
-        if let Some(user_dirs) = UserDirs::new() {
-            if let Some(docs_dir) = user_dirs.document_dir() {
-                return docs_dir
-                    .join(APP_NAME)
-                    .join(format!("{}.db", self.database_name));
-            }
+        if let Some(storage) = AppStorage::new() {
+            storage.get_database_path(&self.database_name)
+        } else {
+            PathBuf::from(".").join(format!("{}.db", self.database_name))
         }
-        PathBuf::from(".").join(format!("{}.db", self.database_name))
     }
 }
 
-// Load configuration from config.xml
+// Load configuration from config.xml in Documents folder
 pub fn load_config() -> Result<Config, String> {
-    let config_path = get_config_file_path()
-        .ok_or_else(|| "Failed to determine config file path".to_string())?;
-
+    let storage = AppStorage::new()
+        .ok_or_else(|| "Failed to initialize app storage".to_string())?;
+    
+    let config_path = storage.get_config_file_path();
+    
     if !config_path.exists() {
         return Err("Config file not found".to_string());
     }
 
     let config_str = fs::read_to_string(&config_path)
         .map_err(|e| format!("Failed to read config file: {}", e))?;
-
+    
     from_str(&config_str)
         .map_err(|e| format!("Failed to parse config XML: {}", e))
 }
 
-// Get the path of config.xml
-pub fn get_config_file_path() -> Option<PathBuf> {
-    UserDirs::new().and_then(|user_dirs| {
-        user_dirs.document_dir().map(|documents_dir| {
-            documents_dir.join(APP_NAME).join(CONFIG_FILE)
-        })
-    })
-}
-
-// Save the database name to a text file
+// Save the database name to safe storage
 pub fn save_database_name(database_name: &str) -> Result<(), String> {
     let storage = AppStorage::new()
         .ok_or_else(|| "Failed to initialize app storage".to_string())?;
@@ -72,7 +61,7 @@ pub fn save_database_name(database_name: &str) -> Result<(), String> {
         .map_err(|e| format!("Failed to save database name: {}", e))
 }
 
-// Load the database name from a text file
+// Load the database name from safe storage
 pub fn load_database_name() -> Result<String, String> {
     let storage = AppStorage::new()
         .ok_or_else(|| "Failed to initialize app storage".to_string())?;
@@ -83,16 +72,16 @@ pub fn load_database_name() -> Result<String, String> {
         .map_err(|e| format!("Failed to read database name: {}", e))
 }
 
-// Check if database_name.txt exists
+// Check if database_name.txt exists in safe storage
 pub fn database_name_file_exists() -> bool {
     AppStorage::new()
         .map(|storage| storage.get_database_name_file_path().exists())
         .unwrap_or(false)
 }
 
-// Utility to get the application directory path
+// Get the public storage directory path (Documents folder)
 pub fn get_app_dir() -> PathBuf {
-    UserDirs::new()
-        .and_then(|dirs| dirs.document_dir().map(|d| d.join(APP_NAME)))
+    AppStorage::new()
+        .map(|storage| storage.get_public_storage())
         .unwrap_or_else(|| PathBuf::from(".").join(APP_NAME))
 }

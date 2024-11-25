@@ -1,19 +1,17 @@
 // src/db.rs
-
 use log::{info, warn};
 use rusqlite::{Connection, Result};
 use std::sync::RwLock;
 use tauri::AppHandle;
 use serde::Serialize;
 use std::path::PathBuf;
-use directories::UserDirs;
+use crate::config::{self, Config};
+use crate::storage::AppStorage;
 
 pub mod notes;
 pub mod auth;
 use notes::NotesDatabase;
 use auth::AuthDatabase;
-use crate::config::{self, Config};
-use crate::storage::AppStorage;
 
 const APP_NAME: &str = "nameOftheApp";
 
@@ -34,10 +32,12 @@ impl Database {
     pub fn new(_app_handle: &AppHandle) -> Result<Self> {
         info!("Initializing database...");
         
-        let db_dir = get_database_dir()
-            .expect("Failed to determine database directory");
-            
+        let storage = AppStorage::new()
+            .expect("Failed to initialize app storage");
+        
+        let db_dir = storage.get_database_dir();
         info!("Creating database directory at {:?}", db_dir);
+        
         std::fs::create_dir_all(&db_dir)
             .expect("Failed to create database directory");
 
@@ -52,14 +52,11 @@ impl Database {
         };
 
         info!("Opening database at {:?}", db_path);
-        
         let conn = Connection::open(&db_path)?;
-
         let notes_db = NotesDatabase::init(&conn)?;
         let auth_db = AuthDatabase::init(&conn)?;
-
-        info!("Database initialization completed successfully");
         
+        info!("Database initialization completed successfully");
         Ok(Database {
             conn: RwLock::new(conn),
             notes: notes_db,
@@ -78,24 +75,20 @@ impl Database {
             .and_then(|n| n.to_str())
             .unwrap_or("unknown")
             .to_string();
-
+            
         let path = self.db_path
             .to_str()
             .unwrap_or("unknown")
             .to_string();
-
+            
         Ok(DatabaseInfo { name, path })
     }
 }
 
 // Helper function to get the database path
 fn get_database_path(db_dir: &PathBuf) -> Result<PathBuf, String> {
-    let db_name = config::load_database_name()?; // Load from database_name.txt
+    let db_name = config::load_database_name()?;
     Ok(db_dir.join(format!("{}.db", db_name)))
-}
-
-fn get_database_dir() -> Option<PathBuf> {
-    AppStorage::new().map(|storage| storage.get_database_dir())
 }
 
 pub fn init_db(app_handle: &AppHandle) -> Result<Database> {
