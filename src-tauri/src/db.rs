@@ -87,7 +87,10 @@ impl Database {
 
 // Helper function to get the database path
 fn get_database_path(db_dir: &PathBuf) -> Result<PathBuf, String> {
-    let db_name = config::load_database_name()?;
+    // First, try to load database name from database_name.txt
+    let db_name = config::load_database_name()
+        .map_err(|e| format!("Failed to load database name: {}", e))?;
+    
     Ok(db_dir.join(format!("{}.db", db_name)))
 }
 

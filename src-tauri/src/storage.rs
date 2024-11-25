@@ -1,4 +1,3 @@
-// src/storage.rs
 use std::path::PathBuf;
 use directories::{ProjectDirs, UserDirs};
 use log::{info, warn};
@@ -9,7 +8,7 @@ const ORGANIZATION: &str = "yourorg";
 const APP_NAME: &str = "nameOftheApp";
 
 pub struct AppStorage {
-    safe_storage: PathBuf,    // For database and database_name.txt
+    safe_storage: PathBuf,    // For database in roaming directory
     public_storage: PathBuf,  // For config.xml in Documents
 }
 
@@ -50,15 +49,7 @@ impl AppStorage {
         self.public_storage.join("config.xml")
     }
 
-    // Add this new method to access public_storage
     pub fn get_public_storage(&self) -> PathBuf {
         self.public_storage.clone()
     }
-}
-
-// Update the get_app_dir function to use the new method
-pub fn get_app_dir() -> PathBuf {
-    AppStorage::new()
-        .map(|storage| storage.get_public_storage())
-        .unwrap_or_else(|| PathBuf::from(".").join(APP_NAME))
 }
