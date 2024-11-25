@@ -108,6 +108,7 @@ pub fn run() {
             school_account_commands::update_school_account,
             school_account_commands::delete_school_account,
             school_account_commands::get_all_school_accounts,
+            school_account_commands::search_school_accounts,
             check_network,
             get_credentials,
             get_database_info
