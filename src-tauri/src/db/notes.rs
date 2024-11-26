@@ -1,3 +1,5 @@
+// src/db/notes.rs
+
 use chrono::{DateTime, Utc};
 use log::info;
 use rusqlite::{Connection, Result as SqliteResult, params, Row};

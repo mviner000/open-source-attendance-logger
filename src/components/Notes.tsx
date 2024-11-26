@@ -1,6 +1,5 @@
-"Notes.tsx"
+// "Notes.tsx"
 
-"use client"
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { NotesApi, NoteWithDates, CreateNoteRequest, UpdateNoteRequest } from '../lib/notes'

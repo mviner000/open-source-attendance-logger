@@ -1,8 +1,28 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import NetworkStatus from './NetworkStatus';
+import { SchoolAccountsApi } from '../lib/school_accounts';
 
 const Navbar: React.FC = () => {
+  const navigate = useNavigate();
+
+  const handleSchoolAccountsClick = async (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent default navigation
+    console.log('School Accounts link clicked');
+    
+    try {
+      console.log('Attempting to fetch school accounts...');
+      const accounts = await SchoolAccountsApi.getAllSchoolAccounts();
+      console.log('Accounts fetched successfully:', accounts);
+      console.log('Number of accounts:', accounts.length);
+      
+      // Proceed with navigation
+      navigate('/school-accounts');
+    } catch (error) {
+      console.error('Error fetching school accounts:', error);
+    }
+  };
+
   return (
     <nav className="bg-[#0D2F16] shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -14,7 +34,11 @@ const Navbar: React.FC = () => {
               </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-              <Link to="/school-accounts" className="border-transparent text-gray-300 hover:border-gray-100 hover:text-gray-100 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-bold">
+              <Link 
+                to="/school-accounts" 
+                onClick={handleSchoolAccountsClick}
+                className="border-transparent text-gray-300 hover:border-gray-100 hover:text-gray-100 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-bold"
+              >
                 School Accounts
               </Link>
               <Link to="/notes" className="border-transparent text-gray-300 hover:border-gray-100 hover:text-gray-100 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-bold">
@@ -32,4 +56,3 @@ const Navbar: React.FC = () => {
 };
 
 export default Navbar;
-

@@ -45,7 +45,7 @@ pub struct SchoolAccount {
 }
 
 // Create Request Struct
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct CreateSchoolAccountRequest {
     pub school_id: String,
     pub first_name: Option<String>,
@@ -192,29 +192,18 @@ fn log_school_account_creation_attempt(
 // Implement the repository for a specific database type (e.g., SQLite)
 impl SchoolAccountRepository for SqliteSchoolAccountRepository {
     fn create_school_account(&self, conn: &Connection, account: CreateSchoolAccountRequest) -> Result<SchoolAccount> {
+        info!("Creating new school account with school_id: {}", account.school_id);
+        
         // Generate a new UUID for the account
         let id = Uuid::new_v4();
         
-        // Log the attempt to create a new school account
-        info!("Attempting to create school account for school ID: {}", account.school_id);
-
         // Validate required fields
         if account.school_id.is_empty() {
-            error!("Failed to create school account: School ID is required");
-            let err = rusqlite::Error::InvalidParameterName(
-                "School ID cannot be empty".to_string()
-            );
-            
-            // Log the error
-            error!("School Account Creation Failed: SchoolID={}, Error={:?}", 
-                account.school_id, 
-                err
-            );
-            
+            let err = rusqlite::Error::InvalidParameterName("School ID cannot be empty".to_string());
+            error!("Failed to create school account: {}", err);
             return Err(err);
         }
 
-        // Attempt to execute the database insertion
         let result = conn.execute(
             "INSERT INTO school_accounts (
                 id, school_id, first_name, middle_name, last_name, 
@@ -226,7 +215,11 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
                 account.first_name, 
                 account.middle_name, 
                 account.last_name,
-                account.gender.as_ref().map(|g| g.clone() as i32), 
+                account.gender.as_ref().map(|g| match g {
+                    Gender::Male => 0,
+                    Gender::Female => 1,
+                    Gender::Other => 2
+                }), 
                 account.course, 
                 account.department, 
                 account.position, 
@@ -243,67 +236,35 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
             ],
         );
 
-        // Handle potential database insertion errors
         match result {
             Ok(_) => {
-                // Create the SchoolAccount struct
                 let created_account = SchoolAccount {
                     id,
                     school_id: account.school_id,
                     first_name: account.first_name,
                     middle_name: account.middle_name,
                     last_name: account.last_name,
-                    gender: account.gender.clone(),
+                    gender: account.gender,
                     course: account.course,
                     department: account.department,
                     position: account.position,
                     major: account.major,
                     year_level: account.year_level,
                     is_active: account.is_active,
-                    last_updated: account.last_updated.clone(),
+                    last_updated: account.last_updated,
                 };
 
-                // Log successful creation
                 info!(
-                    "School Account Created Successfully: ID={}, SchoolID={}, Name={} {}",
+                    "Successfully created school account: ID={}, SchoolID={}",
                     created_account.id,
-                    created_account.school_id,
-                    created_account.first_name.clone().unwrap_or_default(),
-                    created_account.last_name.clone().unwrap_or_default()
+                    created_account.school_id
                 );
 
                 Ok(created_account)
             },
             Err(e) => {
-                // Log different types of errors with appropriate severity
-                match &e {
-                    rusqlite::Error::SqliteFailure(error, message) => {
-                        if error.code == rusqlite::ErrorCode::ConstraintViolation {
-                            error!(
-                                "Constraint violation when creating school account for school ID {}: {:?} {}",
-                                account.school_id, 
-                                error, 
-                                message.as_ref().cloned().unwrap_or_else(|| "Unknown constraint violated".to_string())
-                            );
-                        } else {
-                            error!(
-                                "SQLite error when creating school account for school ID {}: {:?} {}",
-                                account.school_id, 
-                                error, 
-                                message.as_ref().cloned().unwrap_or_else(|| "Unknown error".to_string())
-                            );
-                        }
-                        Err(e)
-                    },
-                    _ => {
-                        error!(
-                            "Unexpected error when creating school account for school ID {}: {:?}",
-                            account.school_id, 
-                            e
-                        );
-                        Err(e)
-                    }
-                }
+                error!("Failed to create school account: {:?}", e);
+                Err(e)
             }
         }
     }
@@ -486,7 +447,13 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
     }
 
     fn get_all_school_accounts(&self, conn: &Connection) -> Result<Vec<SchoolAccount>> {
-        let mut stmt = conn.prepare("SELECT * FROM school_accounts")?;
+        info!("Fetching all school accounts");
+        
+        let mut stmt = conn.prepare(
+            "SELECT * FROM school_accounts ORDER BY school_id"
+        )?;
+        
+        // Use a helper function to map rows consistently
         let account_iter = stmt.query_map([], |row| {
             Ok(SchoolAccount {
                 id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
@@ -517,9 +484,16 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
     
         let mut accounts = Vec::new();
         for account in account_iter {
-            accounts.push(account?);
+            match account {
+                Ok(acc) => accounts.push(acc),
+                Err(e) => {
+                    error!("Error while fetching school account: {:?}", e);
+                    return Err(e);
+                }
+            }
         }
     
+        info!("Successfully fetched {} school accounts", accounts.len());
         Ok(accounts)
     }
 }
@@ -527,23 +501,8 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
 
 // SQL to create the table with all required columns
 pub fn create_school_accounts_table(conn: &Connection) -> SqlResult<()> {
-    // First, check if table exists
-    let table_exists: bool = conn
-        .query_row(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='school_accounts'",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap_or(false);
-
-    if table_exists {
-        // Drop the existing table to recreate with correct schema
-        conn.execute("DROP TABLE school_accounts", [])?;
-    }
-
-    // Create the table with all required columns
     conn.execute(
-        "CREATE TABLE school_accounts (
+        "CREATE TABLE IF NOT EXISTS school_accounts (
             id TEXT PRIMARY KEY,
             school_id TEXT UNIQUE NOT NULL,
             first_name TEXT,

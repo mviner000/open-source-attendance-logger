@@ -1,5 +1,3 @@
-// components/CsvImportComponent.tsx
-
 import React, { useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { CsvImportApi, CsvValidationResult } from '../lib/csv_import';
@@ -8,7 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { FileSpreadsheet, AlertCircle, CheckCircle2 } from 'lucide-react';
 
-export const CsvImportComponent: React.FC = () => {
+interface CsvImportComponentProps {
+  onImportSuccess: () => void;
+}
+
+export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImportSuccess }) => {
   const [filePath, setFilePath] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -16,56 +18,53 @@ export const CsvImportComponent: React.FC = () => {
   const [importResult, setImportResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const handleFileSelect = async () => {
+    try {
+      const selected = await open({
+        filters: [{
+          name: 'CSV',
+          extensions: ['csv']
+        }],
+        multiple: false,
+        directory: false
+      });
 
-// Correct type definition for the open method
-const handleFileSelect = async () => {
-  try {
-    const selected = await open({
-      filters: [{
-        name: 'CSV',
-        extensions: ['csv']
-      }],
-      multiple: false,
-      directory: false
-    });
-
-    if (selected) {
-      setFilePath(selected);
-      setError(null);
-      setValidationResult(null);
-      setImportResult(null);
+      if (selected) {
+        setFilePath(selected);
+        setError(null);
+        setValidationResult(null);
+        setImportResult(null);
+      }
+    } catch (err) {
+      setError('Failed to select file');
+      console.error(err);
     }
-  } catch (err) {
-    setError('Failed to select file');
-    console.error(err);
-  }
-};
+  };
 
   const validateFile = async () => {
     if (!filePath) {
-        setError('Please select a file first');
-        return;
+      setError('Please select a file first');
+      return;
     }
 
     setIsValidating(true);
     setError(null);
 
     try {
-        const result = await CsvImportApi.validateCsvFile(filePath);
-        console.log('Validation result:', result);
-        setValidationResult(result);
-        setIsValidating(false);
+      const result = await CsvImportApi.validateCsvFile(filePath);
+      console.log('Validation result:', result);
+      setValidationResult(result);
+      setIsValidating(false);
     } catch (err) {
-        console.error('Validation error:', err);
-        
-        // More detailed error logging
-        if (err instanceof Error) {
-            setError(err.message);
-        } else {
-            setError(JSON.stringify(err));
-        }
-        
-        setIsValidating(false);
+      console.error('Validation error:', err);
+      
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError(JSON.stringify(err));
+      }
+      
+      setIsValidating(false);
     }
   };
 
@@ -82,6 +81,9 @@ const handleFileSelect = async () => {
       const result = await CsvImportApi.importCsvFile(filePath);
       setImportResult(result);
       setIsImporting(false);
+      if (result.failed_imports === 0) {
+        onImportSuccess();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed');
       setIsImporting(false);
@@ -98,7 +100,6 @@ const handleFileSelect = async () => {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {/* File Selection */}
           <div className="flex space-x-4">
             <Button 
               onClick={handleFileSelect} 
@@ -109,7 +110,6 @@ const handleFileSelect = async () => {
             </Button>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex space-x-4">
             <Button 
               onClick={validateFile} 
@@ -129,7 +129,6 @@ const handleFileSelect = async () => {
             </Button>
           </div>
 
-          {/* Validation Result */}
           {validationResult && (
             <Alert variant={validationResult.is_valid ? 'default' : 'destructive'}>
               {validationResult.is_valid ? (
@@ -167,7 +166,6 @@ const handleFileSelect = async () => {
             </Alert>
           )}
 
-          {/* Import Result */}
           {importResult && (
             <Alert variant={importResult.failed_imports === 0 ? 'default' : 'destructive'}>
               {importResult.failed_imports === 0 ? (
@@ -204,7 +202,6 @@ const handleFileSelect = async () => {
             </Alert>
           )}
 
-          {/* Error Alert */}
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
@@ -219,3 +216,4 @@ const handleFileSelect = async () => {
 };
 
 export default CsvImportComponent;
+
