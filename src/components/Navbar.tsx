@@ -10,7 +10,7 @@ const Navbar: React.FC = () => {
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               <Link to="/" className="text-xl font-bold text-gray-100 hover:text-gray-300 transition-colors">
-                My App
+                Team Esternon
               </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
