@@ -3,12 +3,12 @@ import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { invoke } from "@tauri-apps/api/core";
 import { homeDir, join } from '@tauri-apps/api/path';
-import NetworkStatus from "./components/NetworkStatus";
 import CredentialsInfo from "./components/CredentialsInfo";
 import DatabasePaths from "./components/DatabasePaths";
 import Notes from "./components/Notes";
 import SchoolAccounts from "./components/SchoolAccounts";
 import Navbar from "./components/Navbar";
+import HomePage from "./components/HomePage";
 
 interface Credentials {
   username: string;
@@ -81,8 +81,8 @@ function App() {
     <Router>
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <NetworkStatus />
         <Routes>
+          <Route path="/" element={<HomePage />} />
           <Route path="/school-accounts" element={<SchoolAccounts />} />
           <Route path="/notes" element={<Notes />} />
         </Routes>

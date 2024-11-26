@@ -1,4 +1,4 @@
-// school_accounts.ts
+
 
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from './logger';

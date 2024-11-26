@@ -1,3 +1,5 @@
+// src/lib.rs
+
 mod db;
 mod network;
 mod first_launch;
@@ -29,20 +31,16 @@ async fn authenticate(
     username: String,
     password: String
 ) -> Result<bool, String> {
-    state.0.get_connection()
-        .read()
-        .map_err(|e| e.to_string())
-        .and_then(|conn| state.0.auth.authenticate(&conn, &username, &password))
+    let conn = state.0.get_connection().read();
+    state.0.auth.authenticate(&conn, &username, &password)
 }
 
 #[tauri::command]
 async fn get_credentials(
     state: tauri::State<'_, DbState>,
 ) -> Result<Credentials, String> {
-    state.0.get_connection()
-        .read()
-        .map_err(|e| e.to_string())
-        .and_then(|conn| state.0.auth.get_credentials(&conn))
+    let conn = state.0.get_connection().read();
+    state.0.auth.get_credentials(&conn)
 }
 
 #[tauri::command]
@@ -109,6 +107,7 @@ pub fn run() {
             school_account_commands::delete_school_account,
             school_account_commands::get_all_school_accounts,
             school_account_commands::search_school_accounts,
+            school_account_commands::import_school_accounts_csv,
             check_network,
             get_credentials,
             get_database_info

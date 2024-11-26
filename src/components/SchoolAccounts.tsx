@@ -1,8 +1,10 @@
+// SchoolAccounts.tsx
 import React, { useState, useEffect, useCallback } from 'react'
 import { useToast } from '@/hooks/use-toast'
 import { SchoolAccountsApi, SchoolAccount, CreateSchoolAccountRequest, UpdateSchoolAccountRequest } from '../lib/school_accounts'
 import SchoolAccountCard from './accounts/SchoolAccountCard'
 import CreateSchoolAccountForm from './accounts/CreateSchoolAccountForm'
+import CsvUploadComponent from './accounts/CsvUploadComponent'
 import { ToastProvider, ToastViewport } from "@/components/ui/toast"
 import SearchBar from './SearchBar'
 import { Button } from "@/components/ui/button"
@@ -130,6 +132,10 @@ const SchoolAccounts: React.FC = () => {
     setFilteredAccounts(accounts)
   }
 
+  const handleCsvUploadSuccess = () => {
+    fetchAccounts()
+  }
+
   const CreateAccountTrigger = (
     <Button onClick={() => setOpen(true)}>Create School Account</Button>
   )
@@ -175,6 +181,11 @@ const SchoolAccounts: React.FC = () => {
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>
+
+            <CsvUploadComponent 
+              onUploadSuccess={handleCsvUploadSuccess}
+              buttonLabel="Import CSV"
+            />
           </div>
           
           <SearchBar

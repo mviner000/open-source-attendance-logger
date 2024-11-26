@@ -11,9 +11,12 @@ use crate::storage::AppStorage;
 pub mod notes;
 pub mod auth;
 pub mod school_accounts;
+pub mod csv_import;
 use notes::NotesDatabase;
 use auth::AuthDatabase;
 use school_accounts::{SchoolAccountRepository, SqliteSchoolAccountRepository};
+use parking_lot::RwLock as ParkingLotRwLock;
+use std::sync::RwLock as StdRwLock;
 
 const APP_NAME: &str = "nameOftheApp";
 
@@ -24,7 +27,7 @@ pub struct DatabaseInfo {
 }
 
 pub struct Database {
-    conn: RwLock<Connection>,
+    conn: ParkingLotRwLock<Connection>,
     pub notes: NotesDatabase,
     pub auth: AuthDatabase,
     pub school_accounts: Box<dyn SchoolAccountRepository>,
@@ -68,7 +71,7 @@ impl Database {
         
         info!("Database initialization completed successfully");
         Ok(Database {
-            conn: RwLock::new(conn),
+            conn: ParkingLotRwLock::new(conn), 
             notes: notes_db,
             auth: auth_db,
             school_accounts: school_accounts_db,
@@ -76,7 +79,7 @@ impl Database {
         })
     }
 
-    pub fn get_connection(&self) -> &RwLock<Connection> {
+    pub fn get_connection(&self) -> &ParkingLotRwLock<Connection> {
         &self.conn
     }
 
