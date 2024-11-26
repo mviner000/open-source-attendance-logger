@@ -9,61 +9,8 @@ use crate::db::school_accounts::{
     CreateSchoolAccountRequest, 
     UpdateSchoolAccountRequest
 };
-use std::path::Path;
-use crate::db::csv_import::{import_csv, CsvImportResult};
-
-#[tauri::command]
-
-pub async fn import_school_accounts_csv(
-
-    state: State<'_, DbState>,
-
-    csv_path: String
-
-) -> Result<CsvImportResult, String> {
-
-    println!("Received CSV import request for path: {}", csv_path); // Add this line
-
-    
-
-    let conn = state.0.get_connection();
-
-    let write_guard = conn.write();
-
-    let path = Path::new(&csv_path);
-
-    
-
-    if !path.exists() {
-
-        println!("CSV file does not exist: {}", csv_path); // Add this line
-
-        return Err("CSV file does not exist".to_string());
-
-    }
 
 
-    match import_csv(write_guard, path) {
-
-        Ok(result) => {
-
-            println!("CSV import result: {:?}", result); // Add this line
-
-            Ok(result)
-
-        },
-
-        Err(e) => {
-
-            println!("CSV import error: {}", e); // Add this line
-
-            Err(e)
-
-        }
-
-    }
-
-}
 
 #[tauri::command]
 pub async fn create_school_account(

@@ -1,3 +1,5 @@
+// src/notes_commands.rs
+
 use tauri::State;
 use crate::DbState;
 use crate::db::notes::{Note, CreateNoteRequest, UpdateNoteRequest};

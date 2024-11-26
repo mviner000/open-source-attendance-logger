@@ -31,3 +31,4 @@ directories = "5.0"
 quick-xml = { version = "0.31", features = ["serialize"] }
 csv = "1.2"
 parking_lot = "0.12"
+tauri-plugin-dialog = "2"

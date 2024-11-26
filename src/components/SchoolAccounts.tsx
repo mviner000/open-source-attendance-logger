@@ -12,6 +12,7 @@ import { RefreshCw } from 'lucide-react'
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
 import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer"
 import { useMediaQuery } from '@/hooks/use-media-query'
+import CsvImportComponent from './CsvImportComponent'
 
 const SchoolAccounts: React.FC = () => {
   const [accounts, setAccounts] = useState<SchoolAccount[]>([])
@@ -182,10 +183,11 @@ const SchoolAccounts: React.FC = () => {
               Refresh
             </Button>
 
-            <CsvUploadComponent 
+            {/* <CsvUploadComponent 
               onUploadSuccess={handleCsvUploadSuccess}
               buttonLabel="Import CSV"
-            />
+            /> */}
+            <CsvImportComponent />
           </div>
           
           <SearchBar

@@ -1,12 +1,14 @@
 // src/lib.rs
 
-mod db;
+pub mod db;
+pub mod tests;
 mod network;
 mod first_launch;
 mod config;
 mod storage;
 mod notes_commands;
-mod school_account_commands; // New module for school account-related commands
+mod school_account_commands;
+mod csv_commands;
 
 use tauri::Manager;
 use db::{Database, init_db, DatabaseInfo};
@@ -56,6 +58,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             if let Some(storage) = AppStorage::new() {
                 if let Err(e) = storage.initialize() {
@@ -107,7 +110,8 @@ pub fn run() {
             school_account_commands::delete_school_account,
             school_account_commands::get_all_school_accounts,
             school_account_commands::search_school_accounts,
-            school_account_commands::import_school_accounts_csv,
+            csv_commands::validate_csv_file,
+            csv_commands::import_csv_file,
             check_network,
             get_credentials,
             get_database_info

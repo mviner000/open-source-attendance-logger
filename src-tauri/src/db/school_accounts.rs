@@ -45,7 +45,7 @@ pub struct SchoolAccount {
 }
 
 // Create Request Struct
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct CreateSchoolAccountRequest {
     pub school_id: String,
     pub first_name: Option<String>,

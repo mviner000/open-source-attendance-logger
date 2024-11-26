@@ -12,6 +12,7 @@ pub mod notes;
 pub mod auth;
 pub mod school_accounts;
 pub mod csv_import;
+pub mod csv_transform;
 use notes::NotesDatabase;
 use auth::AuthDatabase;
 use school_accounts::{SchoolAccountRepository, SqliteSchoolAccountRepository};
