@@ -22,10 +22,18 @@ pub struct CsvImportRequest {
     pub file_path: String,
 }
 
+#[derive(serde::Serialize, Debug)]
+pub struct ValidationErrorDetails {
+    row_number: usize,
+    field: Option<String>,
+    error_type: String,
+    error_message: String,
+}
+
 #[command]
 pub async fn validate_csv_file(
     file_path: String
-) -> Result<CsvValidationResult, Vec<ValidationError>> {
+) -> Result<CsvValidationResult, Vec<ValidationErrorDetails>> {
     let path = Path::new(&file_path);
     let validator = CsvValidator::new();
     
@@ -37,8 +45,17 @@ pub async fn validate_csv_file(
             Ok(result)
         },
         Err(errors) => {
-            error!("CSV file validation failed: {:?}", errors);
-            Err(errors)
+            let serializable_errors: Vec<ValidationErrorDetails> = errors.into_iter().map(|error| {
+                ValidationErrorDetails {
+                    row_number: error.row_number,
+                    field: error.field,
+                    error_type: format!("{:?}", error.error_type),
+                    error_message: error.error_message,
+                }
+            }).collect();
+            
+            error!("CSV file validation failed: {:?}", serializable_errors);
+            Err(serializable_errors)
         }
     }
 }

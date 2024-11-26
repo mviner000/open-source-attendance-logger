@@ -7,11 +7,6 @@ use crate::db::csv_import::{ValidationError, ValidationErrorType, SerializableSt
 use log::{info, error};
 
 #[derive(Debug)]
-pub struct CsvTransformer {
-    header_mappings: std::collections::HashMap<String, usize>,
-}
-
-#[derive(Debug)]
 pub enum TransformError {
     MissingRequiredField(String),
     InvalidFieldFormat { field: String, value: String },
@@ -25,96 +20,122 @@ impl From<ValidationError> for TransformError {
     }
 }
 
+
+pub struct CsvTransformer {
+    headers: StringRecord,
+}
+
 impl CsvTransformer {
     pub fn new(headers: &StringRecord) -> Self {
-        let mut mappings = std::collections::HashMap::new();
-        for (index, header) in headers.iter().enumerate() {
-            mappings.insert(header.to_lowercase(), index);
-        }
-        
         CsvTransformer {
-            header_mappings: mappings,
+            headers: headers.clone(),
         }
     }
 
-    pub fn transform_record(&self, record: &StringRecord) -> Result<CreateSchoolAccountRequest, TransformError> {
-        // Helper closure to get field value
-        let get_field = |field: &str| -> Result<String, TransformError> {
-            let index = self.header_mappings.get(&field.to_lowercase())
-                .ok_or_else(|| TransformError::UnknownHeader(field.to_string()))?;
-            Ok(record.get(*index)
-                .map(|s| s.trim().to_string())
-                .unwrap_or_default())
+    pub fn transform_record(&self, record: &StringRecord) -> Result<CreateSchoolAccountRequest, String> {
+        // Helper function to map header to index
+        let get_index = |header: &str| -> Option<usize> {
+            self.headers.iter()
+                .position(|h| h.to_lowercase() == header.to_lowercase())
         };
-
-        // Get required field - student_id
-        let school_id = get_field("student_id")?;
-        if school_id.is_empty() {
-            return Err(TransformError::MissingRequiredField("student_id".to_string()));
-        }
-
-        // Transform gender field
-        let gender = match get_field("gender")?.to_lowercase().as_str() {
-            "male" | "m" => Some(Gender::Male),
-            "female" | "f" => Some(Gender::Female),
-            _ => Some(Gender::Other),
-        };
-
-        // Create the account request
-        let account_request = CreateSchoolAccountRequest {
-            school_id,
-            first_name: Some(get_field("first_name")?),
-            middle_name: Some(get_field("middle_name")?),
-            last_name: Some(get_field("last_name")?),
+    
+        // Required Fields
+        let student_id_idx = get_index("student_id").ok_or("Missing student_id header")?;
+        let first_name_idx = get_index("first_name").ok_or("Missing first_name header")?;
+        let middle_name_idx = get_index("middle_name").ok_or("Missing middle_name header")?;
+        let last_name_idx = get_index("last_name").ok_or("Missing last_name header")?;
+    
+        let student_id = record.get(student_id_idx)
+            .map(|s| s.trim().to_string())
+            .ok_or("Invalid student_id value")?;
+        let first_name = record.get(first_name_idx)
+            .map(|s| Some(s.trim().to_string()))
+            .unwrap_or(None);
+        let middle_name = record.get(middle_name_idx)
+            .map(|s| Some(s.trim().to_string()))
+            .unwrap_or(None);
+        let last_name = record.get(last_name_idx)
+            .map(|s| Some(s.trim().to_string()))
+            .unwrap_or(None);
+    
+        // Optional Fields
+        let gender = get_index("gender")
+            .and_then(|idx| record.get(idx))
+            .and_then(|value| match value.to_lowercase().as_str() {
+                "male" | "0" => Some(Gender::Male),
+                "female" | "1" => Some(Gender::Female),
+                "other" | "2" => Some(Gender::Other),
+                _ => None
+            });
+    
+        let course = get_index("course")
+            .and_then(|idx| record.get(idx))
+            .map(|s| s.trim().to_string());
+    
+        let department = get_index("department")
+            .and_then(|idx| record.get(idx))
+            .map(|s| s.trim().to_string());
+    
+        let position = get_index("position")
+            .and_then(|idx| record.get(idx))
+            .map(|s| s.trim().to_string());
+    
+        let major = get_index("major")
+            .and_then(|idx| record.get(idx))
+            .map(|s| s.trim().to_string());
+    
+        let year_level = get_index("year_level")
+            .and_then(|idx| record.get(idx))
+            .map(|s| s.trim().to_string());
+    
+        let is_active = get_index("is_active")
+            .and_then(|idx| record.get(idx))
+            .map(|value| match value.to_lowercase().as_str() {
+                "true" | "1" => true,
+                "false" | "0" => false,
+                _ => true  // default to true
+            });
+    
+        let last_updated = get_index("last_updated")
+            .and_then(|idx| record.get(idx))
+            .and_then(|value| match value.trim() {
+                "FirstSem2024_2025" | "0" => Some(Semester::FirstSem2024_2025),
+                "SecondSem2024_2025" | "1" => Some(Semester::SecondSem2024_2025),
+                "FirstSem2025_2026" | "2" => Some(Semester::FirstSem2025_2026),
+                _ => None  // Default to None if unrecognized
+            });
+        
+        // Create the CreateSchoolAccountRequest with all the parsed fields
+        Ok(CreateSchoolAccountRequest {
+            school_id: student_id,
+            first_name,
+            middle_name,
+            last_name,
             gender,
-            course: Some(get_field("course")?),
-            department: None, // Not in CSV
-            position: None,   // Not in CSV
-            major: Some(get_field("major")?),
-            year_level: Some(get_field("year_level")?),
-            is_active: true,  // Default to true for new accounts
-            last_updated: Some(Semester::None), // Default to None for new accounts
-        };
-
-        Ok(account_request)
+            course,
+            department,
+            position,
+            major,
+            year_level,
+            is_active: is_active.unwrap_or(true),
+            last_updated: last_updated.or(Some(Semester::None)),
+        })
     }
 
     pub fn transform_records(&self, records: &[StringRecord]) -> Vec<Result<CreateSchoolAccountRequest, TransformError>> {
         records.iter()
-            .map(|record| self.transform_record(record))
+            .map(|record| {
+                self.transform_record(record)
+                    .map_err(|e| TransformError::InvalidFieldFormat { 
+                        field: "multiple".to_string(), 
+                        value: e 
+                    })
+            })
             .collect()
     }
-
-    // Helper method to validate transformed data
-    fn validate_transformed_data(&self, request: &CreateSchoolAccountRequest) -> Result<(), TransformError> {
-        // Validate school_id format (example: should match a specific pattern)
-        if !self.is_valid_school_id(&request.school_id) {
-            return Err(TransformError::InvalidFieldFormat {
-                field: "school_id".to_string(),
-                value: request.school_id.clone(),
-            });
-        }
-
-        // Add more specific validation rules as needed
-        Ok(())
-    }
-
-    // Example validation method - customize based on your requirements
-    fn is_valid_school_id(&self, school_id: &str) -> bool {
-        // Example: Validate if school_id matches your institution's format
-        // This is a placeholder implementation
-        !school_id.is_empty() && school_id.len() <= 20 && school_id.chars().all(|c| c.is_alphanumeric() || c == '-')
-    }
-
-    // Helper method to clean and standardize data
-    fn clean_string(&self, value: &str) -> String {
-        value.trim()
-            .replace(|c: char| !c.is_alphanumeric() && !c.is_whitespace(), "")
-            .split_whitespace()
-            .collect::<Vec<&str>>()
-            .join(" ")
-    }
 }
+
+
 
 // Implement conversion from TransformError to String for error handling
 impl std::fmt::Display for TransformError {

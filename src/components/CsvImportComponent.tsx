@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { CsvImportApi } from '../lib/csv_import';
+import { CsvImportApi, CsvValidationResult } from '../lib/csv_import';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -12,7 +12,7 @@ export const CsvImportComponent: React.FC = () => {
   const [filePath, setFilePath] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [validationResult, setValidationResult] = useState<any>(null);
+  const [validationResult, setValidationResult] = useState<CsvValidationResult | null>(null);
   const [importResult, setImportResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,20 +43,29 @@ const handleFileSelect = async () => {
 
   const validateFile = async () => {
     if (!filePath) {
-      setError('Please select a file first');
-      return;
+        setError('Please select a file first');
+        return;
     }
 
     setIsValidating(true);
     setError(null);
 
     try {
-      const result = await CsvImportApi.validateCsvFile(filePath);
-      setValidationResult(result);
-      setIsValidating(false);
+        const result = await CsvImportApi.validateCsvFile(filePath);
+        console.log('Validation result:', result);
+        setValidationResult(result);
+        setIsValidating(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Validation failed');
-      setIsValidating(false);
+        console.error('Validation error:', err);
+        
+        // More detailed error logging
+        if (err instanceof Error) {
+            setError(err.message);
+        } else {
+            setError(JSON.stringify(err));
+        }
+        
+        setIsValidating(false);
     }
   };
 
@@ -132,16 +141,24 @@ const handleFileSelect = async () => {
                 {validationResult.is_valid ? 'Validation Successful' : 'Validation Failed'}
               </AlertTitle>
               <AlertDescription>
-                Total Rows: {validationResult.total_rows}
-                <br />
-                Validated Rows: {validationResult.validated_rows}
+                {validationResult.is_valid && (
+                  <>
+                    Total Rows: {validationResult.total_rows}
+                    <br />
+                    Validated Rows: {validationResult.validated_rows}
+                  </>
+                )}
+                
                 {!validationResult.is_valid && (
                   <>
-                    <br />
                     Validation Errors:
                     <ul className="list-disc list-inside">
-                      {validationResult.validation_errors.map((err: string, index: number) => (
-                        <li key={index}>{err}</li>
+                      {validationResult.validation_errors.map((err, index) => (
+                        <li key={index}>
+                          {err.error_message} 
+                          {err.field ? ` (Field: ${err.field})` : ''} 
+                          {err.row_number > 0 ? ` at row ${err.row_number}` : ''}
+                        </li>
                       ))}
                     </ul>
                   </>

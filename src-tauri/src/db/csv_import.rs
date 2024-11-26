@@ -1,15 +1,16 @@
+// src/db/csv_import.rs
+
 use std::path::Path;
 use std::fs::File;
 use std::io::{Read, Seek, BufReader};
 use csv::{Reader, StringRecord};
 use rusqlite::Connection;
 use log::{info, error};
-use super::school_accounts::{CreateSchoolAccountRequest, SchoolAccountRepository, SqliteSchoolAccountRepository};
-use serde::{Serialize, Deserialize, ser::{SerializeStruct, Serializer}};
-use parking_lot::RwLockWriteGuard;
+use super::school_accounts::{CreateSchoolAccountRequest, Gender, Semester};
+use serde::{Serialize, Deserialize};
+use serde_json;
 
-// Custom Serializable StringRecord
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SerializableStringRecord {
     pub values: Vec<String>
 }
@@ -22,27 +23,21 @@ impl From<StringRecord> for SerializableStringRecord {
     }
 }
 
-impl From<SerializableStringRecord> for StringRecord {
-    fn from(record: SerializableStringRecord) -> Self {
-        StringRecord::from(record.values)
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CsvValidationResult {
-    pub is_valid: bool,  // Add this field for frontend compatibility
+    pub is_valid: bool,
     pub file_name: String,
     pub file_size: usize,
-    pub total_rows: usize,  // Rename for frontend consistency
-    pub validated_rows: usize,  // Rename for frontend consistency
-    pub invalid_rows: usize,  // Rename for frontend consistency
+    pub total_rows: usize,
+    pub validated_rows: usize,
+    pub invalid_rows: usize,
     pub encoding: String,
     pub preview_rows: Vec<SerializableStringRecord>,
-    pub validation_errors: Vec<ValidationError>,  // Keep this for backwards compatibility
-    pub errors: Vec<ValidationError>,  // Add this to match existing code
+    pub validation_errors: Vec<ValidationError>,
+    pub errors: Vec<ValidationError>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]  // Added Clone derive
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationError {
     pub row_number: usize,
     pub field: Option<String>,
@@ -50,7 +45,7 @@ pub struct ValidationError {
     pub error_message: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]  // Added Clone derive
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ValidationErrorType {
     FileSize,
     FileType,
@@ -63,6 +58,7 @@ pub enum ValidationErrorType {
 pub struct CsvValidator {
     max_file_size: usize,  // bytes
     required_headers: Vec<String>,
+    optional_headers: Vec<String>,
 }
 
 impl CsvValidator {
@@ -71,13 +67,19 @@ impl CsvValidator {
             max_file_size: 10 * 1024 * 1024, 
             required_headers: vec![
                 "student_id".to_string(),
-                "last_name".to_string(),
                 "first_name".to_string(),
                 "middle_name".to_string(),
+                "last_name".to_string(),
+            ],
+            optional_headers: vec![
                 "gender".to_string(),
                 "course".to_string(),
+                "department".to_string(),
+                "position".to_string(),
                 "major".to_string(),
                 "year_level".to_string(),
+                "is_active".to_string(),
+                "last_updated".to_string(),
             ],
         }
     }
@@ -85,7 +87,7 @@ impl CsvValidator {
     pub fn validate_file(&self, file_path: &Path) -> Result<CsvValidationResult, Vec<ValidationError>> {
         let mut errors = Vec::new();
 
-        // File Size Validation
+        // File Size and Type Validation (same as before)
         let file_metadata = std::fs::metadata(file_path)
             .map_err(|_| vec![ValidationError {
                 row_number: 0,
@@ -103,7 +105,6 @@ impl CsvValidator {
             });
         }
 
-        // File Type Validation
         let extension = file_path.extension()
             .and_then(|ext| ext.to_str())
             .unwrap_or("");
@@ -117,7 +118,7 @@ impl CsvValidator {
             });
         }
 
-        // File Opening and Initial Validation
+        // File Reading and Encoding (same as before)
         let file = File::open(file_path)
             .map_err(|_| vec![ValidationError {
                 row_number: 0,
@@ -129,7 +130,6 @@ impl CsvValidator {
         let mut reader = BufReader::new(file);
         let mut buffer = Vec::new();
         
-        // Try to detect potential encoding issues
         reader.read_to_end(&mut buffer)
             .map_err(|_| vec![ValidationError {
                 row_number: 0,
@@ -138,7 +138,6 @@ impl CsvValidator {
                 error_message: "Failed to read file contents".to_string(),
             }])?;
 
-        // Validate UTF-8 encoding
         if let Err(_) = std::str::from_utf8(&buffer) {
             errors.push(ValidationError {
                 row_number: 0,
@@ -207,7 +206,7 @@ impl CsvValidator {
         }
 
         let validation_result = CsvValidationResult {
-            is_valid: errors.is_empty(),  // Add is_valid flag
+            is_valid: errors.is_empty(),
             file_name: file_path.file_name()
                 .and_then(|name| name.to_str())
                 .unwrap_or("unknown")
@@ -218,8 +217,8 @@ impl CsvValidator {
             invalid_rows: invalid_records,
             encoding: "UTF-8".to_string(),
             preview_rows,
-            validation_errors: errors.clone(),  // Maintain backwards compatibility
-            errors,  // New errors field
+            validation_errors: errors.clone(),
+            errors,
         };
 
         if validation_result.is_valid {
@@ -252,27 +251,66 @@ impl CsvValidator {
 
     fn validate_record(&self, record: &StringRecord, headers: &StringRecord) -> Result<(), Vec<ValidationError>> {
         let mut record_errors = Vec::new();
-
-        // Example of detailed record-level validation
-        let student_id_index = headers.iter()
-            .position(|h| h.to_lowercase() == "student_id")
-            .unwrap_or(0);
-
-        let student_id = record.get(student_id_index)
-            .map(|id| id.trim())
-            .unwrap_or("");
-
-        if student_id.is_empty() {
-            record_errors.push(ValidationError {
-                row_number: 0,  // You'd pass actual row number from caller
-                field: Some("student_id".to_string()),
-                error_type: ValidationErrorType::DataIntegrity,
-                error_message: "Student ID cannot be empty".to_string(),
-            });
+    
+        // Validate Required Fields
+        let required_validations = [
+            ("student_id", "Student ID cannot be empty"),
+            ("first_name", "First name cannot be empty"),
+            ("middle_name", "Middle name cannot be empty"),
+            ("last_name", "Last name cannot be empty"),
+        ];
+    
+        for (header, error_msg) in required_validations.iter() {
+            match headers.iter().position(|h| h.to_lowercase() == header.to_lowercase()) {
+                Some(idx) => {
+                    let value = record.get(idx).unwrap_or("").trim();
+                    if value.is_empty() {
+                        record_errors.push(ValidationError {
+                            row_number: 0, 
+                            field: Some(header.to_string()),
+                            error_type: ValidationErrorType::DataIntegrity,
+                            error_message: error_msg.to_string(),
+                        });
+                    }
+                },
+                None => {} // This should be caught by header validation
+            }
         }
-
-        // Add more specific validations here
-
+    
+        // Optional Field Validations
+        let optional_field_validations: Vec<(&str, Box<dyn Fn(&str) -> bool>)> = vec![
+            ("gender", Box::new(|value: &str| -> bool {
+                if value.is_empty() { return true; }
+                matches!(value.to_lowercase().as_str(), "male" | "female" | "other" | "0" | "1" | "2")
+            })),
+            ("year_level", Box::new(|value: &str| -> bool {
+                if value.is_empty() { return true; }
+                // Add any specific year level validations if needed
+                true
+            })),
+            ("is_active", Box::new(|value: &str| -> bool {
+                if value.is_empty() { return true; }
+                matches!(value, "0" | "1" | "true" | "false")
+            })),
+        ];
+    
+        for (header, validation_fn) in optional_field_validations.iter() {
+            match headers.iter().position(|h| h.to_lowercase() == header.to_lowercase()) {
+                Some(idx) => {
+                    let value = record.get(idx).unwrap_or("").trim();
+                    if !value.is_empty() && !validation_fn(value) {
+                        record_errors.push(ValidationError {
+                            row_number: 0, 
+                            field: Some(header.to_string()),
+                            error_type: ValidationErrorType::TypeMismatch,
+                            error_message: format!("Invalid value for {}", header),
+                        });
+                    }
+                },
+                None => {} // Optional field not present is fine
+            }
+        }
+    
         if record_errors.is_empty() {
             Ok(())
         } else {
