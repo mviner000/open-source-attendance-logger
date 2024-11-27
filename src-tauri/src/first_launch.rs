@@ -1,13 +1,13 @@
 // src/first_launch.rs
 use std::fs;
-use log::{info, error};
+use log::info;
 use rusqlite::Connection;
 use tauri::AppHandle;
 use crate::db::auth::{AuthDatabase, Credentials as AuthCredentials};
-use crate::config::{self, Config};
+use crate::config;
 use crate::storage::AppStorage;
 
-pub fn handle_first_launch(app_handle: &AppHandle) -> Result<(), String> {
+pub fn handle_first_launch(_app_handle: &AppHandle) -> Result<(), String> {
     info!("Checking for first launch configuration...");
     
     // Get storage instance

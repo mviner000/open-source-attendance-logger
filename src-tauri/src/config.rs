@@ -5,10 +5,6 @@ use std::fs;
 use std::path::PathBuf;
 use quick_xml::de::from_str;
 
-const APP_NAME: &str = "nameOftheApp";
-const CONFIG_FILE: &str = "config.xml";
-const DATABASE_NAME_FILE: &str = "database_name.txt";
-
 #[derive(Debug, Deserialize)]
 #[serde(rename = "config")]
 pub struct Config {
@@ -72,16 +68,3 @@ pub fn load_database_name() -> Result<String, String> {
         .map_err(|e| format!("Failed to read database name: {}", e))
 }
 
-// Check if database_name.txt exists in safe storage
-pub fn database_name_file_exists() -> bool {
-    AppStorage::new()
-        .map(|storage| storage.get_database_name_file_path().exists())
-        .unwrap_or(false)
-}
-
-// Get the public storage directory path (Documents folder)
-pub fn get_app_dir() -> PathBuf {
-    AppStorage::new()
-        .map(|storage| storage.get_public_storage())
-        .unwrap_or_else(|| PathBuf::from(".").join(APP_NAME))
-}

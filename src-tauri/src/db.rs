@@ -1,10 +1,9 @@
 use log::{info, warn};
 use rusqlite::{Connection, Result};
-use std::sync::RwLock;
 use tauri::AppHandle;
 use serde::Serialize;
 use std::path::PathBuf;
-use crate::config::{self, Config};
+use crate::config;
 use crate::storage::AppStorage;
 pub mod notes;
 pub mod auth;
@@ -17,9 +16,8 @@ use auth::AuthDatabase;
 use school_accounts::{SchoolAccountRepository, SqliteSchoolAccountRepository};
 use semester::{SemesterRepository, SqliteSemesterRepository};
 use parking_lot::RwLock as ParkingLotRwLock;
-use std::sync::RwLock as StdRwLock;
 
-const APP_NAME: &str = "nameOftheApp";
+// const APP_NAME: &str = "nameOftheApp";
 
 #[derive(Debug, Serialize)]
 pub struct DatabaseInfo {

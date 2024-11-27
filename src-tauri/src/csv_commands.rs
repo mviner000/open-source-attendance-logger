@@ -3,8 +3,8 @@ use uuid::Uuid;
 use std::path::Path;
 use tauri::{State, command};
 use crate::DbState;
-use crate::db::csv_import::{CsvValidator, CsvValidationResult, ValidationError};
-use crate::db::csv_transform::{CsvTransformer, TransformError, batch_transform_records};
+use crate::db::csv_import::{CsvValidator, CsvValidationResult};
+use crate::db::csv_transform::{CsvTransformer, batch_transform_records};
 use csv::StringRecord;
 use log::{info, error};
 
@@ -17,11 +17,11 @@ pub struct CsvImportResponse {
     error_details: Vec<String>,
 }
 
-#[derive(serde::Deserialize)]
-pub struct CsvImportRequest {
-    pub file_path: String,
-    pub semester_id: Uuid,
-}
+// #[derive(serde::Deserialize)]
+// pub struct CsvImportRequest {
+//     pub file_path: String,
+//     pub semester_id: Uuid,
+// }
 
 #[derive(serde::Serialize, Debug)]
 pub struct ValidationErrorDetails {

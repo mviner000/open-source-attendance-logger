@@ -3,7 +3,7 @@
 use tauri::State;
 use crate::DbState;
 use crate::db::school_accounts::{SchoolAccount, UpdateSchoolAccountRequest};
-use crate::db::semester::{Semester, SemesterRepository};
+use crate::db::semester::{Semester,};
 use rusqlite::Result;
 use uuid::Uuid;
 use serde::Serialize;

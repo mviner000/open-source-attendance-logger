@@ -2,15 +2,10 @@
 
 use std::path::Path;
 use std::fs::File;
-use std::io::{Read, Seek, BufReader};
+use std::io::{Read, BufReader};
 use csv::{Reader, StringRecord};
-use rusqlite::Connection;
-use log::{info, error};
-use super::semester::{CreateSemesterRequest, Semester};
-use super::school_accounts::{CreateSchoolAccountRequest, Gender};
 use uuid::Uuid;
 use serde::{Serialize, Deserialize};
-use serde_json;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SerializableStringRecord {
@@ -233,24 +228,31 @@ impl CsvValidator {
 
     fn validate_headers(&self, headers: &StringRecord) -> Result<(), Vec<ValidationError>> {
         let header_names: Vec<String> = headers.iter().map(|h| h.to_lowercase()).collect();
-        
-        let missing_headers: Vec<String> = self.required_headers
+    
+        let missing_required_headers: Vec<String> = self.required_headers
             .iter()
             .filter(|&required| !header_names.contains(&required.to_lowercase()))
             .cloned()
             .collect();
-
-        if !missing_headers.is_empty() {
-            Err(missing_headers.into_iter().map(|header| ValidationError {
+    
+        if !missing_required_headers.is_empty() {
+            return Err(missing_required_headers.into_iter().map(|header| ValidationError {
                 row_number: 0,
                 field: Some(header.clone()),
                 error_type: ValidationErrorType::HeaderMissing,
                 error_message: format!("Missing required header: {}", header),
-            }).collect())
-        } else {
-            Ok(())
+            }).collect());
         }
-    }
+    
+        // Optional headers check
+        for optional_header in &self.optional_headers {
+            if !header_names.contains(&optional_header.to_lowercase()) {
+                // You may want to log or ignore missing optional headers
+            }
+        }
+    
+        Ok(())
+    }    
 
     fn validate_record(&self, record: &StringRecord, headers: &StringRecord) -> Result<(), Vec<ValidationError>> {
         let mut record_errors = Vec::new();

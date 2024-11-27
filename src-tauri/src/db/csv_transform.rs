@@ -1,13 +1,10 @@
 // src/db/csv_transform.rs
 
-use std::convert::TryFrom;
 use csv::StringRecord;
 use crate::db::school_accounts::{CreateSchoolAccountRequest, Gender};
-use crate::db::semester::{Semester, SemesterRepository, SqliteSemesterRepository};
-use crate::db::csv_import::{ValidationError, ValidationErrorType, SerializableStringRecord};
-use log::{info, error};
+use crate::db::semester::{SemesterRepository, SqliteSemesterRepository};
+use crate::db::csv_import::ValidationError;
 use rusqlite::Connection;
-use uuid::Uuid;
 
 #[derive(Debug)]
 pub enum TransformError {

@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 use directories::{ProjectDirs, UserDirs};
-use log::{info, warn};
+use log::info;
 use std::fs;
 
 const QUALIFIER: &str = "com";
@@ -51,7 +51,4 @@ impl AppStorage {
         self.public_storage.join("config.xml")
     }
 
-    pub fn get_public_storage(&self) -> PathBuf {
-        self.public_storage.clone()
-    }
 }
