@@ -74,11 +74,17 @@ export const CsvImportApi = {
         return result as CsvValidationResult;
       } catch (invokeError) {
         if (Array.isArray(invokeError)) {
+          // Filter out DataIntegrity errors related to existing accounts
+          const filteredErrors = invokeError.filter(err => 
+            !(err.error_type === 'DataIntegrity' && 
+              err.error_message.includes('School Account already exists'))
+          );
+  
           return {
-            is_valid: false,
+            is_valid: filteredErrors.length === 0,
             total_rows: 0,
             validated_rows: 0,
-            validation_errors: invokeError.map(err => ({
+            validation_errors: filteredErrors.map(err => ({
               row_number: err.row_number || 0,
               field: err.field || null,
               error_type: err.error_type || 'Unknown',

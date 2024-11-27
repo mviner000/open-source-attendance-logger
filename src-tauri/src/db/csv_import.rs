@@ -170,7 +170,7 @@ impl CsvValidator {
 
     pub fn validate_file(&self, file_path: &Path) -> Result<CsvValidationResult, Vec<ValidationError>> {
         let mut errors = Vec::new();
-
+    
         // File Size and Type Validation
         let file_metadata = std::fs::metadata(file_path)
             .map_err(|_| vec![ValidationError {
@@ -179,7 +179,7 @@ impl CsvValidator {
                 error_type: ValidationErrorType::FileSize,
                 error_message: "Unable to read file metadata".to_string(),
             }])?;
-
+    
         if file_metadata.len() > self.max_file_size as u64 {
             errors.push(ValidationError {
                 row_number: 0,
@@ -188,7 +188,7 @@ impl CsvValidator {
                 error_message: format!("File exceeds maximum size of {} bytes", self.max_file_size),
             });
         }
-
+    
         let extension = file_path.extension()
             .and_then(|ext| ext.to_str())
             .unwrap_or("");
@@ -201,7 +201,7 @@ impl CsvValidator {
                 error_message: "Invalid file type. Only .csv files are allowed".to_string(),
             });
         }
-
+    
         // File Reading and Encoding
         let file = File::open(file_path)
             .map_err(|_| vec![ValidationError {
@@ -210,7 +210,7 @@ impl CsvValidator {
                 error_type: ValidationErrorType::Encoding,
                 error_message: "Unable to open file".to_string(),
             }])?;
-
+    
         let mut reader = BufReader::new(file);
         let mut buffer = Vec::new();
         
@@ -221,7 +221,7 @@ impl CsvValidator {
                 error_type: ValidationErrorType::Encoding,
                 error_message: "Failed to read file contents".to_string(),
             }])?;
-
+    
         if std::str::from_utf8(&buffer).is_err() {
             errors.push(ValidationError {
                 row_number: 0,
@@ -230,10 +230,10 @@ impl CsvValidator {
                 error_message: "File is not valid UTF-8".to_string(),
             });
         }
-
+    
         // Create CSV reader
         let mut rdr = Reader::from_reader(std::io::Cursor::new(buffer.clone()));
-
+    
         // Header Validation
         let headers = match rdr.headers() {
             Ok(headers) => headers.clone(),
@@ -247,18 +247,18 @@ impl CsvValidator {
                 StringRecord::new()
             }
         };
-
+    
         // Validate Headers
         if let Err(header_errors) = self.validate_headers(&headers) {
             errors.extend(header_errors);
         }
-
+    
         // Detailed Row Validation and Preview
         let mut preview_rows = Vec::new();
         let mut total_records = 0;
         let mut valid_records = 0;
         let mut invalid_records = 0;
-
+    
         for (idx, result) in rdr.records().enumerate() {
             total_records += 1;
             match result {
@@ -288,10 +288,9 @@ impl CsvValidator {
                 }
             }
         }
-
-        // Additional validation for existing school accounts
-        if errors.is_empty() {
-            // Re-read the CSV to get records for existing account check
+    
+        // Prepare to check existing accounts (without adding them as errors)
+        let existing_accounts = if errors.is_empty() {
             let mut rdr = Reader::from_reader(std::io::Cursor::new(buffer.clone()));
             
             // Get headers
@@ -299,36 +298,18 @@ impl CsvValidator {
                 Ok(headers) => headers.clone(),
                 Err(_) => StringRecord::new()
             };
-
+    
             // Collect records
             let records: Vec<StringRecord> = rdr.records()
                 .filter_map(Result::ok)
                 .collect();
-
-            // Check for existing accounts
-            let existing_accounts = self.check_existing_school_accounts(&headers, &records);
-
-            // If existing accounts are found, add them to errors
-            if !existing_accounts.is_empty() {
-                let existing_account_errors: Vec<ValidationError> = existing_accounts
-                    .into_iter()
-                    .map(|existing| ValidationError {
-                        row_number: existing.row_number,
-                        field: Some("student_id".to_string()),
-                        error_type: ValidationErrorType::DataIntegrity,
-                        error_message: format!(
-                            "School Account already exists: ID={}, Name={} {}",
-                            existing.school_id,
-                            existing.first_name.unwrap_or_default(),
-                            existing.last_name.unwrap_or_default()
-                        ),
-                    })
-                    .collect();
-
-                errors.extend(existing_account_errors);
-            }
-        }
-
+    
+            // Check for existing accounts (but don't treat as errors)
+            self.check_existing_school_accounts(&headers, &records)
+        } else {
+            Vec::new()
+        };
+    
         // Create validation result
         let mut validation_result = CsvValidationResult {
             is_valid: errors.is_empty(),
@@ -345,7 +326,7 @@ impl CsvValidator {
             validation_errors: errors.clone(),
             errors: errors.clone(),
         };
-
+    
         // Determine validation result
         if validation_result.is_valid {
             Ok(validation_result)

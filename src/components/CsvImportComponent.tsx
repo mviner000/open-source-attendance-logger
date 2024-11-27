@@ -97,18 +97,17 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
       setError('Please select a file first');
       return;
     }
-
+  
     setIsValidating(true);
     setError(null);
-
+  
     try {
       const result = await CsvImportApi.validateCsvFile(fullFilePath);
       setValidationResult(result);
       
-      if (result.is_valid) {
-        const accountInfo = await CsvImportApi.checkExistingAccounts(fullFilePath);
-        setExistingAccountInfo(accountInfo);
-      }
+      // This will still work the same way
+      const accountInfo = await CsvImportApi.checkExistingAccounts(fullFilePath);
+      setExistingAccountInfo(accountInfo);
     } catch (err) {
       console.error('Validation error:', err);
       setError(err instanceof Error ? err.message : 'Validation failed');

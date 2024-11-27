@@ -107,6 +107,7 @@ pub fn run() {
             school_account_commands::update_school_account_semester,
             csv_commands::validate_csv_file,
             csv_commands::import_csv_file,
+            csv_commands::check_existing_accounts,
             semester_commands::create_semester,
             semester_commands::get_all_semesters,
             semester_commands::get_semester,
