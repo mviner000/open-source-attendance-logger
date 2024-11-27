@@ -2,9 +2,12 @@
 
 use std::convert::TryFrom;
 use csv::StringRecord;
-use crate::db::school_accounts::{CreateSchoolAccountRequest, Gender, Semester};
+use crate::db::school_accounts::{CreateSchoolAccountRequest, Gender};
+use crate::db::semester::{Semester, SemesterRepository, SqliteSemesterRepository};
 use crate::db::csv_import::{ValidationError, ValidationErrorType, SerializableStringRecord};
 use log::{info, error};
+use rusqlite::Connection;
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub enum TransformError {
@@ -12,6 +15,7 @@ pub enum TransformError {
     InvalidFieldFormat { field: String, value: String },
     UnknownHeader(String),
     ValidationError(ValidationError),
+    SemesterNotFound(String),
 }
 
 impl From<ValidationError> for TransformError {
@@ -20,19 +24,20 @@ impl From<ValidationError> for TransformError {
     }
 }
 
-
 pub struct CsvTransformer {
     headers: StringRecord,
+    conn: Connection,
 }
 
 impl CsvTransformer {
-    pub fn new(headers: &StringRecord) -> Self {
+    pub fn new(headers: &StringRecord, conn: Connection) -> Self {
         CsvTransformer {
             headers: headers.clone(),
+            conn,
         }
     }
 
-    pub fn transform_record(&self, record: &StringRecord) -> Result<CreateSchoolAccountRequest, String> {
+    pub fn transform_record(&self, record: &StringRecord) -> Result<CreateSchoolAccountRequest, TransformError> {
         // Helper function to map header to index
         let get_index = |header: &str| -> Option<usize> {
             self.headers.iter()
@@ -40,14 +45,21 @@ impl CsvTransformer {
         };
     
         // Required Fields
-        let student_id_idx = get_index("student_id").ok_or("Missing student_id header")?;
-        let first_name_idx = get_index("first_name").ok_or("Missing first_name header")?;
-        let middle_name_idx = get_index("middle_name").ok_or("Missing middle_name header")?;
-        let last_name_idx = get_index("last_name").ok_or("Missing last_name header")?;
+        let student_id_idx = get_index("student_id")
+            .ok_or(TransformError::MissingRequiredField("student_id".to_string()))?;
+        let first_name_idx = get_index("first_name")
+            .ok_or(TransformError::MissingRequiredField("first_name".to_string()))?;
+        let middle_name_idx = get_index("middle_name")
+            .ok_or(TransformError::MissingRequiredField("middle_name".to_string()))?;
+        let last_name_idx = get_index("last_name")
+            .ok_or(TransformError::MissingRequiredField("last_name".to_string()))?;
     
         let student_id = record.get(student_id_idx)
             .map(|s| s.trim().to_string())
-            .ok_or("Invalid student_id value")?;
+            .ok_or(TransformError::InvalidFieldFormat { 
+                field: "student_id".to_string(), 
+                value: "Empty or invalid".to_string() 
+            })?;
         let first_name = record.get(first_name_idx)
             .map(|s| Some(s.trim().to_string()))
             .unwrap_or(None);
@@ -96,13 +108,15 @@ impl CsvTransformer {
                 _ => true  // default to true
             });
     
-        let last_updated = get_index("last_updated")
+        // Use SemesterRepository to find semester by label
+        let last_updated_semester_id = get_index("last_updated")
             .and_then(|idx| record.get(idx))
-            .and_then(|value| match value.trim() {
-                "FirstSem2024_2025" | "0" => Some(Semester::FirstSem2024_2025),
-                "SecondSem2024_2025" | "1" => Some(Semester::SecondSem2024_2025),
-                "FirstSem2025_2026" | "2" => Some(Semester::FirstSem2025_2026),
-                _ => None  // Default to None if unrecognized
+            .and_then(|value| {
+                let semester_repo = SqliteSemesterRepository;
+                match semester_repo.get_semester_by_label(&self.conn, value.trim()) {
+                    Ok(semester) => Some(semester.id),
+                    Err(_) => None
+                }
             });
         
         // Create the CreateSchoolAccountRequest with all the parsed fields
@@ -118,7 +132,7 @@ impl CsvTransformer {
             major,
             year_level,
             is_active: is_active.unwrap_or(true),
-            last_updated: last_updated.or(Some(Semester::None)),
+            last_updated_semester_id,
         })
     }
 
@@ -126,16 +140,10 @@ impl CsvTransformer {
         records.iter()
             .map(|record| {
                 self.transform_record(record)
-                    .map_err(|e| TransformError::InvalidFieldFormat { 
-                        field: "multiple".to_string(), 
-                        value: e 
-                    })
             })
             .collect()
     }
 }
-
-
 
 // Implement conversion from TransformError to String for error handling
 impl std::fmt::Display for TransformError {
@@ -152,6 +160,9 @@ impl std::fmt::Display for TransformError {
             }
             TransformError::ValidationError(error) => {
                 write!(f, "Validation error: {:?}", error)
+            }
+            TransformError::SemesterNotFound(label) => {
+                write!(f, "Semester not found: {}", label)
             }
         }
     }

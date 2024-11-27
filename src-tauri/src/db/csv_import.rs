@@ -6,7 +6,9 @@ use std::io::{Read, Seek, BufReader};
 use csv::{Reader, StringRecord};
 use rusqlite::Connection;
 use log::{info, error};
-use super::school_accounts::{CreateSchoolAccountRequest, Gender, Semester};
+use super::semester::{CreateSemesterRequest, Semester};
+use super::school_accounts::{CreateSchoolAccountRequest, Gender};
+use uuid::Uuid;
 use serde::{Serialize, Deserialize};
 use serde_json;
 
@@ -79,7 +81,8 @@ impl CsvValidator {
                 "major".to_string(),
                 "year_level".to_string(),
                 "is_active".to_string(),
-                "last_updated".to_string(),
+                "last_updated_semester_id".to_string(),
+                "last_updated_semester".to_string(),
             ],
         }
     }
@@ -291,6 +294,10 @@ impl CsvValidator {
             ("is_active", Box::new(|value: &str| -> bool {
                 if value.is_empty() { return true; }
                 matches!(value, "0" | "1" | "true" | "false")
+            })),
+            ("last_updated_semester_id", Box::new(|value: &str| -> bool {
+                if value.is_empty() { return true; }
+                Uuid::parse_str(value).is_ok()
             })),
         ];
     

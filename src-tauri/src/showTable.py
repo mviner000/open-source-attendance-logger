@@ -1,7 +1,7 @@
 import sqlite3
 
 # SQLite database path
-DB_PATH = '/home/ssd-ubuntu2/.config/nameoftheapp/latest_db_nov_27v1.db'
+DB_PATH = '/home/ssd-ubuntu2/.config/nameoftheapp/latest_db_nov_27.db'
 
 def show_tables_and_columns():
     try:

@@ -1,7 +1,6 @@
 // src/lib.rs
 
 pub mod db;
-pub mod tests;
 mod network;
 mod first_launch;
 mod config;
@@ -9,6 +8,7 @@ mod storage;
 mod notes_commands;
 mod school_account_commands;
 mod csv_commands;
+mod semester_commands;
 
 use tauri::Manager;
 use db::{Database, init_db, DatabaseInfo};
@@ -18,7 +18,6 @@ use network::{start_network_monitoring, check_network};
 use first_launch::handle_first_launch;
 use log::error;
 use storage::AppStorage;
-use uuid::Uuid;
 
 pub use crate::config::{Config, DatabaseConfig}; 
 
@@ -104,8 +103,16 @@ pub fn run() {
             notes_commands::delete_note,
             notes_commands::search_notes,
             school_account_commands::get_all_school_accounts,
+            school_account_commands::get_school_account_with_semester,
+            school_account_commands::update_school_account_semester,
             csv_commands::validate_csv_file,
             csv_commands::import_csv_file,
+            semester_commands::create_semester,
+            semester_commands::get_all_semesters,
+            semester_commands::get_semester,
+            semester_commands::get_semester_by_label,
+            semester_commands::update_semester,
+            semester_commands::delete_semester,
             check_network,
             get_credentials,
             get_database_info

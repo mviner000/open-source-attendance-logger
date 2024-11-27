@@ -16,16 +16,6 @@ pub enum Gender {
     Other,
 }
 
-// Enum for last updated semesters
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub enum Semester {
-    FirstSem2024_2025,
-    SecondSem2024_2025,
-    FirstSem2025_2026,
-    SecondSem2025_2026,
-    None,
-}
-
 // Struct representing the School Account
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SchoolAccount {
@@ -41,7 +31,7 @@ pub struct SchoolAccount {
     pub major: Option<String>,
     pub year_level: Option<String>,
     pub is_active: bool,
-    pub last_updated: Option<Semester>,
+    pub last_updated_semester_id: Option<Uuid>,
 }
 
 // Create Request Struct
@@ -59,12 +49,11 @@ pub struct CreateSchoolAccountRequest {
     pub year_level: Option<String>,
     #[serde(default = "default_is_active")]
     pub is_active: bool,
-    #[serde(default)]
-    pub last_updated: Option<Semester>,
+    pub last_updated_semester_id: Option<Uuid>,
 }
 
 // Update Request Struct
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize,Default)]
 pub struct UpdateSchoolAccountRequest {
     pub first_name: Option<String>,
     pub middle_name: Option<String>,
@@ -77,8 +66,7 @@ pub struct UpdateSchoolAccountRequest {
     pub major: Option<String>,
     pub year_level: Option<String>,
     pub is_active: Option<bool>,
-    #[serde(deserialize_with = "deserialize_semester", default)]
-    pub last_updated: Option<Semester>,
+    pub last_updated_semester_id: Option<Uuid>,
 }
 
 // Default function for is_active
@@ -135,35 +123,6 @@ where
     })
 }
 
-fn deserialize_semester<'de, D>(deserializer: D) -> Result<Option<Semester>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = serde_json::Value::deserialize(deserializer)?;
-    Ok(match value {
-        serde_json::Value::String(s) => Some(match s.as_str() {
-            "FirstSem2024_2025" => Semester::FirstSem2024_2025,
-            "SecondSem2024_2025" => Semester::SecondSem2024_2025,
-            "FirstSem2025_2026" => Semester::FirstSem2025_2026,
-            "SecondSem2025_2026" => Semester::SecondSem2025_2026,
-            _ => Semester::None,
-        }),
-        serde_json::Value::Number(n) => {
-            let semester = n.as_i64().unwrap_or(4);
-            Some(match semester {
-                0 => Semester::FirstSem2024_2025,
-                1 => Semester::SecondSem2024_2025,
-                2 => Semester::FirstSem2025_2026,
-                3 => Semester::SecondSem2025_2026,
-                _ => Semester::None,
-            })
-        }
-        _ => None,
-    })
-}
-
-
-
 // Optional helper function for logging (if needed separately)
 fn log_school_account_creation_attempt(
     account: &CreateSchoolAccountRequest, 
@@ -207,7 +166,7 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
         let result = conn.execute(
             "INSERT INTO school_accounts (
                 id, school_id, first_name, middle_name, last_name, 
-                gender, course, department, position, major, year_level, is_active, last_updated
+                gender, course, department, position, major, year_level, is_active, last_updated_semester_id
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 id.to_string(), 
@@ -226,13 +185,7 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
                 account.major, 
                 account.year_level,
                 account.is_active,
-                account.last_updated.clone().map(|s| match s {
-                    Semester::FirstSem2024_2025 => 0,
-                    Semester::SecondSem2024_2025 => 1,
-                    Semester::FirstSem2025_2026 => 2,
-                    Semester::SecondSem2025_2026 => 3,
-                    Semester::None => 4,
-                })
+                account.last_updated_semester_id.map(|id| id.to_string())
             ],
         );
 
@@ -251,7 +204,7 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
                     major: account.major,
                     year_level: account.year_level,
                     is_active: account.is_active,
-                    last_updated: account.last_updated,
+                    last_updated_semester_id: account.last_updated_semester_id,
                 };
 
                 info!(
@@ -302,13 +255,7 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
                 major: row.get(9)?,
                 year_level: row.get(10)?,
                 is_active: row.get(11)?,
-                last_updated: row.get::<_, Option<i32>>(12)?.map(|s| match s {
-                    0 => Semester::FirstSem2024_2025,
-                    1 => Semester::SecondSem2024_2025,
-                    2 => Semester::FirstSem2025_2026,
-                    3 => Semester::SecondSem2025_2026,
-                    _ => Semester::None,
-                }),
+                last_updated_semester_id: row.get::<_, Option<String>>(12)?.map(|id| Uuid::parse_str(&id).unwrap()),
             })
         })?;
     
@@ -342,13 +289,7 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
                     major: row.get(9)?,
                     year_level: row.get(10)?,
                     is_active: row.get(11)?,
-                    last_updated: row.get::<_, Option<i32>>(12)?.map(|s| match s {
-                        0 => Semester::FirstSem2024_2025,
-                        1 => Semester::SecondSem2024_2025,
-                        2 => Semester::FirstSem2025_2026,
-                        3 => Semester::SecondSem2025_2026,
-                        _ => Semester::None,
-                    }),
+                    last_updated_semester_id: row.get::<_, Option<String>>(12)?.map(|id| Uuid::parse_str(&id).unwrap()),
                 })
             },
         )?;
@@ -378,13 +319,7 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
                     major: row.get(9)?,
                     year_level: row.get(10)?,
                     is_active: row.get(11)?,
-                    last_updated: row.get::<_, Option<i32>>(12)?.map(|s| match s {
-                        0 => Semester::FirstSem2024_2025,
-                        1 => Semester::SecondSem2024_2025,
-                        2 => Semester::FirstSem2025_2026,
-                        3 => Semester::SecondSem2025_2026,
-                        _ => Semester::None,
-                    }),
+                    last_updated_semester_id: row.get::<_, Option<String>>(12)?.map(|id| Uuid::parse_str(&id).unwrap()),
                 })
             },
         )?;
@@ -405,7 +340,7 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
                 major = COALESCE(?8, major), 
                 year_level = COALESCE(?9, year_level),
                 is_active = COALESCE(?10, is_active),
-                last_updated = COALESCE(?11, last_updated)
+                last_updated_semester_id = COALESCE(?11, last_updated_semester_id)
             WHERE id = ?12",
             params![
                 account.first_name, 
@@ -422,13 +357,7 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
                 account.major, 
                 account.year_level,
                 account.is_active,
-                account.last_updated.clone().map(|s| match s {
-                    Semester::FirstSem2024_2025 => 0,
-                    Semester::SecondSem2024_2025 => 1,
-                    Semester::FirstSem2025_2026 => 2,
-                    Semester::SecondSem2025_2026 => 3,
-                    Semester::None => 4,
-                }),
+                account.last_updated_semester_id.map(|id| id.to_string()),
                 id.to_string()
             ],
         )?;
@@ -472,13 +401,7 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
                 major: row.get(9)?,
                 year_level: row.get(10)?,
                 is_active: row.get(11)?,
-                last_updated: row.get::<_, Option<i32>>(12)?.map(|s| match s {
-                    0 => Semester::FirstSem2024_2025,
-                    1 => Semester::SecondSem2024_2025,
-                    2 => Semester::FirstSem2025_2026,
-                    3 => Semester::SecondSem2025_2026,
-                    _ => Semester::None,
-                }),
+                last_updated_semester_id: row.get::<_, Option<String>>(12)?.map(|id| Uuid::parse_str(&id).unwrap()),
             })
         })?;
     
@@ -498,7 +421,6 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
     }
 }
 
-
 // SQL to create the table with all required columns
 pub fn create_school_accounts_table(conn: &Connection) -> SqlResult<()> {
     conn.execute(
@@ -515,8 +437,11 @@ pub fn create_school_accounts_table(conn: &Connection) -> SqlResult<()> {
             major TEXT,
             year_level TEXT,
             is_active INTEGER NOT NULL DEFAULT 1,
-            last_updated INTEGER,
-            CONSTRAINT school_id_unique UNIQUE (school_id)
+            last_updated_semester_id TEXT,
+            CONSTRAINT school_id_unique UNIQUE (school_id),
+            CONSTRAINT fk_semester 
+                FOREIGN KEY (last_updated_semester_id) 
+                REFERENCES semesters(id)
         )",
         [],
     )?;

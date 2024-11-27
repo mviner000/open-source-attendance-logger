@@ -1,5 +1,3 @@
-// src/csv_commands.rs
-
 use std::path::Path;
 use tauri::{State, command};
 use crate::DbState;
@@ -80,8 +78,11 @@ pub async fn import_csv_file(
     let headers = rdr.headers()
         .map_err(|e| format!("Failed to read headers: {}", e))?;
     
-    // Create transformer
-    let transformer = CsvTransformer::new(&headers);
+    // Get a cloned connection using the provided method
+    let conn = state.0.get_cloned_connection();
+    
+    // Create transformer with headers and connection
+    let transformer = CsvTransformer::new(&headers, conn);
     
     // Collect records
     let records: Vec<StringRecord> = rdr.records()

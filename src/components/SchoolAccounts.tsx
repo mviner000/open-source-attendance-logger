@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { SchoolAccountsApi, SchoolAccount } from '@/lib/school_accounts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import CsvImportComponent from './CsvImportComponent';
+import { SemesterModal } from './semester-modal';
 
 const SchoolAccountsPage: React.FC = () => {
   const [schoolAccounts, setSchoolAccounts] = useState<SchoolAccount[]>([]);
@@ -11,14 +12,31 @@ const SchoolAccountsPage: React.FC = () => {
   const fetchSchoolAccounts = useCallback(async () => {
     try {
       setLoading(true);
-      const accounts = await SchoolAccountsApi.getAllSchoolAccounts();
-      setSchoolAccounts(accounts);
+      const allAccounts = await SchoolAccountsApi.getAllSchoolAccounts();
+      
+      // Fetch semester details for each account
+      const accountsWithSemester = await Promise.all(
+        allAccounts.map(async (account) => {
+          if (account.last_updated_semester_id) {
+            try {
+              return await SchoolAccountsApi.getSchoolAccountWithSemester(account.id);
+            } catch (err) {
+              console.error(`Failed to fetch semester for account ${account.id}:`, err);
+              return account;
+            }
+          }
+          return account;
+        })
+      );
+
+      setSchoolAccounts(accountsWithSemester);
       
       // Log uuid and school_id for each account
-      accounts.forEach(account => {
+      accountsWithSemester.forEach(account => {
         console.log({
           uuid: account.id,  // Using id as UUID
-          school_id: account.school_id
+          school_id: account.school_id,
+          semester: account.last_updated_semester?.label || 'No semester'
         });
       });
       
@@ -48,6 +66,7 @@ const SchoolAccountsPage: React.FC = () => {
   return (
     <>
       <CsvImportComponent onImportSuccess={handleImportSuccess} />
+      <SemesterModal />
       <Card className="mt-8 w-full max-w-6xl mx-auto">
         <CardHeader>
           <CardTitle>School Accounts</CardTitle>
@@ -65,7 +84,7 @@ const SchoolAccountsPage: React.FC = () => {
                     <th className="p-2 border text-left">Course</th>
                     <th className="p-2 border text-left">Year Level</th>
                     <th className="p-2 border text-left">Department</th>
-                    <th className="p-2 border text-left">Last Updated</th>
+                    <th className="p-2 border text-left">Last Updated Semester</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -78,7 +97,9 @@ const SchoolAccountsPage: React.FC = () => {
                       <td className="p-2 border">{account.course}</td>
                       <td className="p-2 border">{account.year_level}</td>
                       <td className="p-2 border">{account.department}</td>
-                      <td className="p-2 border">{account.last_updated}</td>
+                      <td className="p-2 border">
+                        {account.last_updated_semester?.label || 'No semester'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

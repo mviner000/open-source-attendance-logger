@@ -3,6 +3,13 @@
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from './logger';
 
+// Interface for Semester
+export interface Semester {
+  id: string;  // UUID as string
+  label: string;
+}
+
+// Updated SchoolAccount interface with proper semester relationship
 export interface SchoolAccount {
   id: string;  // UUID as string
   school_id: string;
@@ -16,7 +23,8 @@ export interface SchoolAccount {
   major: string | null;
   year_level: string | null;
   is_active: boolean;
-  last_updated: 'FirstSem2024_2025' | 'SecondSem2024_2025' | 'FirstSem2025_2026' | 'SecondSem2025_2026' | 'None' | null;
+  last_updated_semester_id: string | null;  // UUID of related semester
+  last_updated_semester?: Semester | null;  // Optional joined semester data
 }
 
 export const SchoolAccountsApi = {
@@ -31,4 +39,31 @@ export const SchoolAccountsApi = {
       throw error;
     }
   },
+
+  async getSchoolAccountWithSemester(id: string): Promise<SchoolAccount> {
+    try {
+      logger.log(`Fetching school account with ID: ${id}`, 'info');
+      const account = await invoke('get_school_account_with_semester', { id });
+      logger.log('Successfully fetched school account with semester data', 'success');
+      return account as SchoolAccount;
+    } catch (error) {
+      logger.log(`Failed to fetch school account: ${error}`, 'error');
+      throw error;
+    }
+  },
+
+  async updateSchoolAccountSemester(id: string, semesterId: string): Promise<SchoolAccount> {
+    try {
+      logger.log(`Updating school account ${id} with semester ${semesterId}`, 'info');
+      const account = await invoke('update_school_account_semester', { 
+        id, 
+        semesterId 
+      });
+      logger.log('Successfully updated school account semester', 'success');
+      return account as SchoolAccount;
+    } catch (error) {
+      logger.log(`Failed to update school account semester: ${error}`, 'error');
+      throw error;
+    }
+  }
 };
