@@ -13,7 +13,7 @@ pub async fn create_semester(
     username: String,
     password: String
 ) -> Result<Semester, String> {
-    let conn = state.0.get_connection().write();
+    let conn = state.0.get_cloned_connection();
     
     if state.0.auth.authenticate(&conn, &username, &password)? {
         state.0.semester_repository.create_semester(&conn, semester)
@@ -27,7 +27,7 @@ pub async fn create_semester(
 pub async fn get_all_semesters(
     state: State<'_, DbState>
 ) -> Result<Vec<Semester>, String> {
-    let conn = state.0.get_connection().read();
+    let conn = state.0.get_cloned_connection();
     state.0.semester_repository.get_all_semesters(&conn)
         .map_err(|e| e.to_string())
 }
@@ -40,7 +40,7 @@ pub async fn get_semester(
     let semester_id = Uuid::parse_str(&id)
         .map_err(|e| format!("Invalid UUID format: {}", e))?;
     
-    let conn = state.0.get_connection().read();
+    let conn = state.0.get_cloned_connection();
     state.0.semester_repository.get_semester(&conn, semester_id)
         .map_err(|e| e.to_string())
 }
@@ -50,7 +50,7 @@ pub async fn get_semester_by_label(
     state: State<'_, DbState>,
     label: String
 ) -> Result<Semester, String> {
-    let conn = state.0.get_connection().read();
+    let conn = state.0.get_cloned_connection();
     state.0.semester_repository.get_semester_by_label(&conn, &label)
         .map_err(|e| e.to_string())
 }
@@ -66,7 +66,7 @@ pub async fn update_semester(
     let semester_id = Uuid::parse_str(&id)
         .map_err(|e| format!("Invalid UUID format: {}", e))?;
     
-    let conn = state.0.get_connection().write();
+        let conn = state.0.get_cloned_connection();
     
     if state.0.auth.authenticate(&conn, &username, &password)? {
         state.0.semester_repository.update_semester(&conn, semester_id, semester)
@@ -86,7 +86,7 @@ pub async fn delete_semester(
     let semester_id = Uuid::parse_str(&id)
         .map_err(|e| format!("Invalid UUID format: {}", e))?;
     
-    let conn = state.0.get_connection().write();
+        let conn = state.0.get_cloned_connection();
     
     if state.0.auth.authenticate(&conn, &username, &password)? {
         state.0.semester_repository.delete_semester(&conn, semester_id)

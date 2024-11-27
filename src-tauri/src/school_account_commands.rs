@@ -20,9 +20,16 @@ pub struct SchoolAccountWithSemester {
 pub async fn get_all_school_accounts(
     state: State<'_, DbState>
 ) -> Result<Vec<SchoolAccount>, String> {
-    let conn = state.0.get_connection().read();
-    state.0.school_accounts.get_all_school_accounts(&conn)
+    let db_state = state.0.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        db_state.with_connection_blocking(|conn| {
+            // Use Arc's deref method to access the repository methods
+            db_state.school_accounts.get_all_school_accounts(conn)
+        })
         .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -30,27 +37,34 @@ pub async fn get_school_account_with_semester(
     state: State<'_, DbState>,
     id: String,
 ) -> Result<SchoolAccountWithSemester, String> {
-    let conn = state.0.get_connection().read();
+    let db_state = state.0.clone(); // Use clone if available
     
-    // Get the school account
-    let account = state.0.school_accounts.get_school_account(&conn, Uuid::parse_str(&id)
-        .map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())?;
-    
-    // Get the related semester if it exists
-    let semester = match account.last_updated_semester_id {
-        Some(semester_id) => {
-            state.0.semester_repository.get_semester(&conn, semester_id)
-                .ok()
-        },
-        None => None
-    };
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = db_state.get_connection_blocking();
+        
+        // Get the school account
+        let account = db_state.school_accounts.get_school_account(&conn, 
+            Uuid::parse_str(&id).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+        
+        // Get the related semester if it exists
+        let semester = match account.last_updated_semester_id {
+            Some(semester_id) => {
+                db_state.semester_repository.get_semester(&conn, semester_id)
+                    .ok()
+            },
+            None => None
+        };
 
-    Ok(SchoolAccountWithSemester {
-        account,
-        last_updated_semester: semester,
+        Ok(SchoolAccountWithSemester {
+            account,
+            last_updated_semester: semester,
+        })
     })
+    .await
+    .map_err(|e| e.to_string())?
 }
+
 
 #[tauri::command]
 pub async fn update_school_account_semester(
@@ -58,25 +72,28 @@ pub async fn update_school_account_semester(
     id: String,
     semester_id: String,
 ) -> Result<SchoolAccount, String> {
-    let conn = state.0.get_connection().write();
+    let db_state = state.0.clone(); // Use clone if available
     
-    // Parse UUIDs
-    let account_id = Uuid::parse_str(&id)
-        .map_err(|e| e.to_string())?;
-    let semester_uuid = Uuid::parse_str(&semester_id)
-        .map_err(|e| e.to_string())?;
-    
-    // Verify semester exists
-    state.0.semester_repository.get_semester(&conn, semester_uuid)
-        .map_err(|_| "Semester not found".to_string())?;
-    
-    // Create update request with just the semester ID
-    let update = UpdateSchoolAccountRequest {
-        last_updated_semester_id: Some(semester_uuid),
-        ..Default::default()
-    };
-    
-    // Update the account
-    state.0.school_accounts.update_school_account(&conn, account_id, update)
-        .map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = db_state.get_connection_blocking();
+        
+        let account_id = Uuid::parse_str(&id)
+            .map_err(|e| e.to_string())?;
+        let semester_uuid = Uuid::parse_str(&semester_id)
+            .map_err(|e| e.to_string())?;
+
+        // Validate semester exists
+        db_state.semester_repository.get_semester(&conn, semester_uuid)
+            .map_err(|e| format!("Semester validation error: {}", e))?;
+
+        let update = UpdateSchoolAccountRequest {
+            last_updated_semester_id: Some(semester_uuid),
+            ..Default::default()
+        };
+
+        db_state.school_accounts.update_school_account(&conn, account_id, update)
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }

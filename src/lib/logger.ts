@@ -1,3 +1,5 @@
+// lib/logger.ts
+
 export type LogLevel = 'info' | 'error' | 'success' | 'warn';
 
 interface LogMessage {

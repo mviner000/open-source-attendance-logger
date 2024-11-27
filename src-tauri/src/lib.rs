@@ -32,7 +32,7 @@ async fn authenticate(
     username: String,
     password: String
 ) -> Result<bool, String> {
-    let conn = state.0.get_connection().read();
+    let conn = state.0.get_cloned_connection();
     state.0.auth.authenticate(&conn, &username, &password)
 }
 
@@ -40,7 +40,7 @@ async fn authenticate(
 async fn get_credentials(
     state: tauri::State<'_, DbState>,
 ) -> Result<Credentials, String> {
-    let conn = state.0.get_connection().read();
+    let conn = state.0.get_cloned_connection();
     state.0.auth.get_credentials(&conn)
 }
 

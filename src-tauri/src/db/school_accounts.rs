@@ -75,27 +75,23 @@ fn default_is_active() -> bool {
 }
 
 // Trait for SchoolAccount Database Operations
-pub trait SchoolAccountRepository {
-    // Create a new school account
+pub trait SchoolAccountRepository: Send {
+    // Existing methods remain the same...
     fn create_school_account(&self, conn: &Connection, account: CreateSchoolAccountRequest) -> Result<SchoolAccount>;
     
-    // Get a school account by its UUID
     fn get_school_account(&self, conn: &Connection, id: Uuid) -> Result<SchoolAccount>;
     
-    // Get a school account by school_id
     fn get_school_account_by_school_id(&self, conn: &Connection, school_id: &str) -> Result<SchoolAccount>;
     
-    // Update a school account
     fn update_school_account(&self, conn: &Connection, id: Uuid, account: UpdateSchoolAccountRequest) -> Result<SchoolAccount>;
     
-    // Delete a school account
     fn delete_school_account(&self, conn: &Connection, id: Uuid) -> Result<()>;
     
-    // Get all school accounts
     fn get_all_school_accounts(&self, conn: &Connection) -> Result<Vec<SchoolAccount>>;
 
     fn search_school_accounts(&self, conn: &Connection, query: &str) -> Result<Vec<SchoolAccount>>;
 }
+
 
 pub struct SqliteSchoolAccountRepository;
 

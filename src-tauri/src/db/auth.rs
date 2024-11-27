@@ -9,6 +9,7 @@ pub struct Credentials {
     pub password: String,
 }
 
+#[derive(Clone)]
 pub struct AuthDatabase;
 
 impl AuthDatabase {

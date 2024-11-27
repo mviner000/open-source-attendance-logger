@@ -15,24 +15,41 @@ use notes::NotesDatabase;
 use auth::AuthDatabase;
 use school_accounts::{SchoolAccountRepository, SqliteSchoolAccountRepository};
 use semester::{SemesterRepository, SqliteSemesterRepository};
-use parking_lot::RwLock as ParkingLotRwLock;
+use tokio::sync::RwLock;
+use std::sync::Arc;
 
-// const APP_NAME: &str = "nameOftheApp";
-
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct DatabaseInfo {
     pub name: String,
     pub path: String,
 }
 
 pub struct Database {
-    conn: ParkingLotRwLock<Connection>,
+    conn: RwLock<Connection>,
     pub notes: NotesDatabase,
     pub auth: AuthDatabase,
-    pub school_accounts: Box<dyn SchoolAccountRepository>,
-    pub semester_repository: Box<dyn SemesterRepository + Send + Sync>, // Updated to include Send + Sync
+    pub school_accounts: Arc<dyn SchoolAccountRepository + Send + Sync>,
+    pub semester_repository: Box<dyn SemesterRepository + Send + Sync>,
     db_path: PathBuf,
 }
+
+// Implement Clone manually to allow cloning with Arc
+impl Clone for Database {
+    fn clone(&self) -> Self {
+        let new_conn = Connection::open(&self.db_path)
+            .expect("Failed to open a new database connection");
+
+        Database {
+            conn: RwLock::new(new_conn),
+            notes: self.notes.clone(),
+            auth: self.auth.clone(),
+            school_accounts: Arc::clone(&self.school_accounts),
+            semester_repository: Box::new(SqliteSemesterRepository) as Box<dyn SemesterRepository + Send + Sync>,
+            db_path: self.db_path.clone(),
+        }
+    }
+}
+
 
 impl Database {
     pub fn new(_app_handle: &AppHandle) -> Result<Self> {
@@ -66,12 +83,13 @@ impl Database {
         let auth_db = AuthDatabase::init(&conn)?;
         
         // Initialize repositories
-        let school_accounts_db = Box::new(SqliteSchoolAccountRepository);
+        let school_accounts_db: Arc<dyn SchoolAccountRepository + Send + Sync> = 
+            Arc::new(SqliteSchoolAccountRepository);
         let semester_repository = Box::new(SqliteSemesterRepository) as Box<dyn SemesterRepository + Send + Sync>;
         
         info!("Database initialization completed successfully");
         Ok(Database {
-            conn: ParkingLotRwLock::new(conn),
+            conn: RwLock::new(conn),
             notes: notes_db,
             auth: auth_db,
             school_accounts: school_accounts_db,
@@ -80,8 +98,28 @@ impl Database {
         })
     }
 
-    pub fn get_connection(&self) -> &ParkingLotRwLock<Connection> {
-        &self.conn
+    // Add this method for blocking connection retrieval
+    pub fn get_connection_blocking(&self) -> Connection {
+        Connection::open(&self.db_path)
+            .expect("Failed to open a new database connection")
+    }
+
+    // Modify this method to use blocking connection
+    pub fn with_connection_blocking<F, T>(&self, f: F) -> Result<T>
+    where
+        F: FnOnce(&Connection) -> Result<T>
+    {
+        let conn = self.get_connection_blocking();
+        f(&conn)
+    }
+
+    // Existing methods remain the same...
+    pub async fn with_connection<F, T>(&self, f: F) -> Result<T>
+    where
+        F: FnOnce(&Connection) -> Result<T>
+    {
+        let new_conn = Connection::open(&self.db_path)?;
+        f(&new_conn)
     }
 
     pub fn get_cloned_connection(&self) -> Connection {

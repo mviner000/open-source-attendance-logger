@@ -28,6 +28,7 @@ pub struct UpdateNoteRequest {
     pub content: Option<String>,
 }
 
+#[derive(Clone)]
 pub struct NotesDatabase;
 
 impl NotesDatabase {

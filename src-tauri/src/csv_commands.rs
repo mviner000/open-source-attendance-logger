@@ -105,7 +105,7 @@ pub async fn import_csv_file(
     
     // Perform import for each batch
     for batch in batched_records {
-        let conn = state.0.get_connection().write();
+        let conn = state.0.get_cloned_connection();
         
         for result in batch {
             total_processed += 1;
