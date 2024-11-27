@@ -1,9 +1,19 @@
-import React, { useState } from 'react';
+// src/CsvImportComponent.tsx
+
+import React, { useState, useEffect } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { CsvImportApi, CsvValidationResult } from '../lib/csv_import';
+import { CsvImportApi, CsvValidationResult, CsvImportResponse } from '../lib/csv_import';
+import { SemesterApi, Semester } from '../lib/semester';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
 import { FileSpreadsheet, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface CsvImportComponentProps {
@@ -15,8 +25,27 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
   const [isValidating, setIsValidating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [validationResult, setValidationResult] = useState<CsvValidationResult | null>(null);
-  const [importResult, setImportResult] = useState<any>(null);
+  const [importResult, setImportResult] = useState<CsvImportResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Semester-related states
+  const [semesters, setSemesters] = useState<Semester[]>([]);
+  const [selectedSemester, setSelectedSemester] = useState<Semester | null>(null);
+
+  // Fetch semesters when component mounts
+  useEffect(() => {
+    const fetchSemesters = async () => {
+      try {
+        const fetchedSemesters = await SemesterApi.getAllSemesters();
+        setSemesters(fetchedSemesters);
+      } catch (err) {
+        setError('Failed to fetch semesters');
+        console.error(err);
+      }
+    };
+
+    fetchSemesters();
+  }, []);
 
   const handleFileSelect = async () => {
     try {
@@ -34,6 +63,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
         setError(null);
         setValidationResult(null);
         setImportResult(null);
+        setSelectedSemester(null);
       }
     } catch (err) {
       setError('Failed to select file');
@@ -52,18 +82,11 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
 
     try {
       const result = await CsvImportApi.validateCsvFile(filePath);
-      console.log('Validation result:', result);
       setValidationResult(result);
       setIsValidating(false);
     } catch (err) {
       console.error('Validation error:', err);
-      
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError(JSON.stringify(err));
-      }
-      
+      setError(err instanceof Error ? err.message : 'Validation failed');
       setIsValidating(false);
     }
   };
@@ -74,16 +97,29 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
       return;
     }
 
+    if (!selectedSemester) {
+      setError('Please select a semester');
+      return;
+    }
+
     setIsImporting(true);
     setError(null);
 
     try {
-      const result = await CsvImportApi.importCsvFile(filePath);
-      setImportResult(result);
-      setIsImporting(false);
-      if (result.failed_imports === 0) {
+      // Import file with selected semester
+      const importResult = await CsvImportApi.importCsvFile({
+        file_path: filePath, 
+        semester_id: selectedSemester.id
+      });
+      
+      setImportResult(importResult);
+      
+      // If import is fully successful, trigger onImportSuccess
+      if (importResult.failed_imports === 0) {
         onImportSuccess();
       }
+      
+      setIsImporting(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed');
       setIsImporting(false);
@@ -100,6 +136,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
+          {/* File Selection */}
           <div className="flex space-x-4">
             <Button 
               onClick={handleFileSelect} 
@@ -110,6 +147,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </Button>
           </div>
 
+          {/* Validate File Button */}
           <div className="flex space-x-4">
             <Button 
               onClick={validateFile} 
@@ -119,16 +157,45 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             >
               {isValidating ? 'Validating...' : 'Validate File'}
             </Button>
+          </div>
+
+          {/* Semester Selection (Only after successful validation) */}
+          {validationResult?.is_valid && (
+            <div className="space-y-2">
+              <Select 
+                value={selectedSemester?.id} 
+                onValueChange={(selectedId) => {
+                  const semester = semesters.find(s => s.id === selectedId);
+                  setSelectedSemester(semester || null);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Semester" />
+                </SelectTrigger>
+                <SelectContent>
+                  {semesters.map(semester => (
+                    <SelectItem key={semester.id} value={semester.id}>
+                      {semester.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Import Button (Only when semester is selected) */}
+          {validationResult?.is_valid && selectedSemester && (
             <Button 
               onClick={importFile} 
-              disabled={!filePath || isImporting || !validationResult?.is_valid}
+              disabled={isImporting}
               variant="default"
-              className="flex-grow"
+              className="w-full"
             >
               {isImporting ? 'Importing...' : 'Import File'}
             </Button>
-          </div>
+          )}
 
+          {/* Validation Result Alert */}
           {validationResult && (
             <Alert variant={validationResult.is_valid ? 'default' : 'destructive'}>
               {validationResult.is_valid ? (
@@ -166,6 +233,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </Alert>
           )}
 
+          {/* Import Result Alert */}
           {importResult && (
             <Alert variant={importResult.failed_imports === 0 ? 'default' : 'destructive'}>
               {importResult.failed_imports === 0 ? (
@@ -189,7 +257,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
                     <br />
                     Error Details:
                     <ul className="list-disc list-inside">
-                      {importResult.error_details.slice(0, 5).map((err: string, index: number) => (
+                      {importResult.error_details.slice(0, 5).map((err, index) => (
                         <li key={index}>{err}</li>
                       ))}
                       {importResult.error_details.length > 5 && (
@@ -202,6 +270,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </Alert>
           )}
 
+          {/* Error Alert */}
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
@@ -216,4 +285,3 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
 };
 
 export default CsvImportComponent;
-

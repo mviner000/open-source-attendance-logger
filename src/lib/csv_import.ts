@@ -2,6 +2,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from './logger';
+import { Uuid } from '@/types/uuid';
 
 // Interfaces matching the Rust structs
 export interface ValidationErrorDetails {
@@ -28,6 +29,7 @@ export interface CsvImportResponse {
 
 export interface CsvImportRequest {
   file_path: string;
+  semester_id: Uuid;
 }
 
 export const CsvImportApi = {
@@ -78,10 +80,13 @@ export const CsvImportApi = {
       }
   },
 
-  async importCsvFile(filePath: string): Promise<CsvImportResponse> {
+  async importCsvFile(request: CsvImportRequest): Promise<CsvImportResponse> {
     try {
-      logger.log(`Importing CSV file: ${filePath}`, 'info');
-      const result = await invoke('import_csv_file', { filePath });
+      logger.log(`Importing CSV file: ${request.file_path}`, 'info');
+      const result = await invoke('import_csv_file', { 
+        filePath: request.file_path,
+        semesterId: request.semester_id 
+      });
       
       const importResponse = result as CsvImportResponse;
       

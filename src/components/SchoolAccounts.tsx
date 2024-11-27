@@ -64,9 +64,11 @@ const SchoolAccountsPage: React.FC = () => {
   }
 
   return (
-    <>
+    <div className='pb-10'>
       <CsvImportComponent onImportSuccess={handleImportSuccess} />
-      <SemesterModal />
+      <div className="mt-8 w-full max-w-6xl mx-auto">
+        <SemesterModal />
+      </div>
       <Card className="mt-8 w-full max-w-6xl mx-auto">
         <CardHeader>
           <CardTitle>School Accounts</CardTitle>
@@ -83,8 +85,7 @@ const SchoolAccountsPage: React.FC = () => {
                     <th className="p-2 border text-left">Name</th>
                     <th className="p-2 border text-left">Course</th>
                     <th className="p-2 border text-left">Year Level</th>
-                    <th className="p-2 border text-left">Department</th>
-                    <th className="p-2 border text-left">Last Updated Semester</th>
+                    <th className="p-2 border text-left">Last Updated On</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -96,7 +97,6 @@ const SchoolAccountsPage: React.FC = () => {
                       </td>
                       <td className="p-2 border">{account.course}</td>
                       <td className="p-2 border">{account.year_level}</td>
-                      <td className="p-2 border">{account.department}</td>
                       <td className="p-2 border">
                         {account.last_updated_semester?.label || 'No semester'}
                       </td>
@@ -108,7 +108,7 @@ const SchoolAccountsPage: React.FC = () => {
           )}
         </CardContent>
       </Card>
-    </>
+    </div>
   );
 };
 

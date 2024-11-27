@@ -1,3 +1,5 @@
+// src/csv_commands.rs
+use uuid::Uuid;
 use std::path::Path;
 use tauri::{State, command};
 use crate::DbState;
@@ -18,6 +20,7 @@ pub struct CsvImportResponse {
 #[derive(serde::Deserialize)]
 pub struct CsvImportRequest {
     pub file_path: String,
+    pub semester_id: Uuid,
 }
 
 #[derive(serde::Serialize, Debug)]
@@ -61,7 +64,8 @@ pub async fn validate_csv_file(
 #[command]
 pub async fn import_csv_file(
     state: State<'_, DbState>,
-    file_path: String
+    file_path: String,
+    semester_id: Uuid // Add semester_id parameter
 ) -> Result<CsvImportResponse, String> {
     let path = Path::new(&file_path);
     let validator = CsvValidator::new();
@@ -107,7 +111,10 @@ pub async fn import_csv_file(
             total_processed += 1;
             
             match result {
-                Ok(account_request) => {
+                Ok(mut account_request) => {
+                    // Set the last_updated_semester_id for each account
+                    account_request.last_updated_semester_id = Some(semester_id);
+                    
                     match state.0.school_accounts.create_school_account(&conn, account_request) {
                         Ok(_) => successful_imports += 1,
                         Err(e) => {
@@ -133,8 +140,8 @@ pub async fn import_csv_file(
         error_details,
     };
     
-    info!("CSV import completed: {} total, {} successful, {} failed", 
-        total_processed, successful_imports, failed_imports);
+    info!("CSV import completed: {} total, {} successful, {} failed, Semester={}", 
+        total_processed, successful_imports, failed_imports, semester_id);
     
     Ok(import_response)
 }

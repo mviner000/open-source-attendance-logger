@@ -1,3 +1,5 @@
+// lib/semester.ts
+
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from './logger';
 
