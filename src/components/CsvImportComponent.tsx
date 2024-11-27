@@ -1,3 +1,5 @@
+// CsvImportComponent.tsx
+
 import React, { useState, useEffect } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { CsvImportApi, CsvValidationResult, CsvImportResponse } from '../lib/csv_import';
@@ -14,6 +16,7 @@ import {
 } from '@/components/ui/select';
 import { FileSpreadsheet, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { CsvHeaderValidationErrors } from './CsvHeaderValidationErrors';
+import CsvContentValidationErrors from './CsvContentValidationErrors';
 
 interface CsvImportComponentProps {
   onImportSuccess: () => void;
@@ -195,42 +198,14 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
           )}
 
           {validationResult && (
-            <Alert variant={validationResult.is_valid ? 'default' : 'destructive'}>
-              {validationResult.is_valid ? (
-                <CheckCircle2 className="h-4 w-4" />
-              ) : (
-                <AlertCircle className="h-4 w-4" />
+            <>
+              {validationResult.validation_errors.some(err => err.row_number === 0) && (
+                <CsvHeaderValidationErrors errors={validationResult.validation_errors} />
               )}
-              <AlertTitle>
-                {validationResult.is_valid ? 'Validation Successful' : 'Validation Failed'}
-              </AlertTitle>
-              <AlertDescription>
-                {validationResult.is_valid && (
-                  <>
-                    Total Rows: {validationResult.total_rows}
-                    <br />
-                    Validated Rows: {validationResult.validated_rows}
-                  </>
-                )}
-                
-                {!validationResult.is_valid && (
-                  <>
-                    Validation Errors:
-                    <ul className="list-disc list-inside">
-                      {validationResult.validation_errors
-                        .filter(err => err.row_number > 0)
-                        .map((err, index) => (
-                          <li key={index}>
-                            {err.error_message} 
-                            {err.field ? ` (Field: ${err.field})` : ''} 
-                            {err.row_number > 0 ? ` at row ${err.row_number}` : ''}
-                          </li>
-                        ))}
-                    </ul>
-                  </>
-                )}
-              </AlertDescription>
-            </Alert>
+              {validationResult.validation_errors.some(err => err.row_number > 0) && (
+                <CsvContentValidationErrors errors={validationResult.validation_errors} />
+              )}
+            </>
           )}
 
           {importResult && (

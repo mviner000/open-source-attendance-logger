@@ -92,7 +92,6 @@ pub trait SchoolAccountRepository: Send {
     fn search_school_accounts(&self, conn: &Connection, query: &str) -> Result<Vec<SchoolAccount>>;
 }
 
-
 pub struct SqliteSchoolAccountRepository;
 
 fn deserialize_gender<'de, D>(deserializer: D) -> Result<Option<Gender>, D::Error>

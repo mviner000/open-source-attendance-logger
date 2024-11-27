@@ -33,10 +33,16 @@ pub struct ValidationErrorDetails {
 
 #[command]
 pub async fn validate_csv_file(
+    state: State<'_, DbState>,
     file_path: String
 ) -> Result<CsvValidationResult, Vec<ValidationErrorDetails>> {
     let path = Path::new(&file_path);
-    let validator = CsvValidator::new();
+    
+    // Get a cloned connection
+    let conn = state.0.get_cloned_connection();
+    
+    // Create validator with the connection
+    let validator = CsvValidator::new(conn);
     
     info!("Attempting to validate CSV file: {}", file_path);
     
@@ -68,7 +74,12 @@ pub async fn import_csv_file(
     semester_id: Uuid // Add semester_id parameter
 ) -> Result<CsvImportResponse, String> {
     let path = Path::new(&file_path);
-    let validator = CsvValidator::new();
+    
+    // Get a connection using get_connection_blocking or get_cloned_connection
+    let conn = state.0.get_cloned_connection();
+    
+    // Pass the connection to CsvValidator
+    let validator = CsvValidator::new(conn);
     
     // First, validate the file
     let validation_result = validator.validate_file(path)
@@ -82,7 +93,7 @@ pub async fn import_csv_file(
     let headers = rdr.headers()
         .map_err(|e| format!("Failed to read headers: {}", e))?;
     
-    // Get a cloned connection using the provided method
+    // Get another connection for the transformer
     let conn = state.0.get_cloned_connection();
     
     // Create transformer with headers and connection

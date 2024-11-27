@@ -5,7 +5,17 @@ use std::fs::File;
 use std::io::{Read, BufReader};
 use csv::{Reader, StringRecord};
 use uuid::Uuid;
+use rusqlite::{Connection, params};
 use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ExistingAccountInfo {
+    pub existing_id: String,
+    pub school_id: String,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    pub row_number: usize,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SerializableStringRecord {
@@ -56,10 +66,11 @@ pub struct CsvValidator {
     max_file_size: usize,  // bytes
     required_headers: Vec<String>,
     optional_headers: Vec<String>,
+    connection: Connection,
 }
 
 impl CsvValidator {
-    pub fn new() -> Self {
+    pub fn new(connection: Connection) -> Self {
         CsvValidator {
             max_file_size: 10 * 1024 * 1024, 
             required_headers: vec![
@@ -79,13 +90,88 @@ impl CsvValidator {
                 "last_updated_semester_id".to_string(),
                 "last_updated_semester".to_string(),
             ],
+            connection,
         }
+    }
+
+    pub fn check_existing_school_accounts(&self, headers: &StringRecord, records: &[StringRecord]) -> Vec<ExistingAccountInfo> {
+        // Find the index of the school_id column
+        let school_id_index = match headers.iter().position(|h| h.to_lowercase() == "student_id") {
+            Some(idx) => idx,
+            None => return Vec::new(), // If no student_id column, return empty
+        };
+    
+        // Collect all school IDs from the CSV
+        let csv_school_ids: Vec<String> = records
+            .iter()
+            .map(|record| record.get(school_id_index).unwrap_or("").trim().to_string())
+            .filter(|id| !id.is_empty())
+            .collect();
+    
+        if csv_school_ids.is_empty() {
+            return Vec::new();
+        }
+    
+        // Prepare SQL query to find existing accounts
+        let placeholders = csv_school_ids.iter().map(|_| "?").collect::<Vec<&str>>().join(",");
+        let query = format!(
+            "SELECT id, school_id, first_name, last_name FROM school_accounts WHERE school_id IN ({})", 
+            placeholders
+        );
+    
+        // Execute query
+        let mut existing_accounts = Vec::new();
+        
+        // Use match to handle potential query preparation errors
+        let stmt_result = self.connection.prepare(&query);
+        let mut stmt = match stmt_result {
+            Ok(stmt) => stmt,
+            Err(_) => return Vec::new(), // Return empty if statement preparation fails
+        };
+    
+        let params: Vec<&dyn rusqlite::ToSql> = csv_school_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+    
+        // Use match to handle potential query errors
+        let rows_result = stmt.query(params.as_slice());
+        let mut rows = match rows_result {
+            Ok(rows) => rows,
+            Err(_) => return Vec::new(), // Return empty if query fails
+        };
+    
+        // Iterate through rows
+        while let Ok(Some(row)) = rows.next() {
+            let existing_id: String = row.get(0).unwrap_or_default();
+            let school_id: String = row.get(1).unwrap_or_default();
+            let first_name: Option<String> = row.get(2).ok();
+            let last_name: Option<String> = row.get(3).ok();
+    
+            // Find the row number in the original CSV
+            let csv_row_number = records
+                .iter()
+                .position(|record| 
+                    record.get(school_id_index)
+                        .map(|id| id.trim() == school_id)
+                        .unwrap_or(false)
+                )
+                .map(|idx| idx + 2) // +2 to account for header row and 1-based indexing
+                .unwrap_or(0);
+    
+            existing_accounts.push(ExistingAccountInfo {
+                existing_id,
+                school_id,
+                first_name,
+                last_name,
+                row_number: csv_row_number,
+            });
+        }
+    
+        existing_accounts
     }
 
     pub fn validate_file(&self, file_path: &Path) -> Result<CsvValidationResult, Vec<ValidationError>> {
         let mut errors = Vec::new();
 
-        // File Size and Type Validation (same as before)
+        // File Size and Type Validation
         let file_metadata = std::fs::metadata(file_path)
             .map_err(|_| vec![ValidationError {
                 row_number: 0,
@@ -116,7 +202,7 @@ impl CsvValidator {
             });
         }
 
-        // File Reading and Encoding (same as before)
+        // File Reading and Encoding
         let file = File::open(file_path)
             .map_err(|_| vec![ValidationError {
                 row_number: 0,
@@ -136,7 +222,7 @@ impl CsvValidator {
                 error_message: "Failed to read file contents".to_string(),
             }])?;
 
-        if let Err(_) = std::str::from_utf8(&buffer) {
+        if std::str::from_utf8(&buffer).is_err() {
             errors.push(ValidationError {
                 row_number: 0,
                 field: None,
@@ -162,8 +248,8 @@ impl CsvValidator {
             }
         };
 
-        let header_validation = self.validate_headers(&headers);
-        if let Err(header_errors) = header_validation {
+        // Validate Headers
+        if let Err(header_errors) = self.validate_headers(&headers) {
             errors.extend(header_errors);
         }
 
@@ -203,7 +289,48 @@ impl CsvValidator {
             }
         }
 
-        let validation_result = CsvValidationResult {
+        // Additional validation for existing school accounts
+        if errors.is_empty() {
+            // Re-read the CSV to get records for existing account check
+            let mut rdr = Reader::from_reader(std::io::Cursor::new(buffer.clone()));
+            
+            // Get headers
+            let headers = match rdr.headers() {
+                Ok(headers) => headers.clone(),
+                Err(_) => StringRecord::new()
+            };
+
+            // Collect records
+            let records: Vec<StringRecord> = rdr.records()
+                .filter_map(Result::ok)
+                .collect();
+
+            // Check for existing accounts
+            let existing_accounts = self.check_existing_school_accounts(&headers, &records);
+
+            // If existing accounts are found, add them to errors
+            if !existing_accounts.is_empty() {
+                let existing_account_errors: Vec<ValidationError> = existing_accounts
+                    .into_iter()
+                    .map(|existing| ValidationError {
+                        row_number: existing.row_number,
+                        field: Some("student_id".to_string()),
+                        error_type: ValidationErrorType::DataIntegrity,
+                        error_message: format!(
+                            "School Account already exists: ID={}, Name={} {}",
+                            existing.school_id,
+                            existing.first_name.unwrap_or_default(),
+                            existing.last_name.unwrap_or_default()
+                        ),
+                    })
+                    .collect();
+
+                errors.extend(existing_account_errors);
+            }
+        }
+
+        // Create validation result
+        let mut validation_result = CsvValidationResult {
             is_valid: errors.is_empty(),
             file_name: file_path.file_name()
                 .and_then(|name| name.to_str())
@@ -216,9 +343,10 @@ impl CsvValidator {
             encoding: "UTF-8".to_string(),
             preview_rows,
             validation_errors: errors.clone(),
-            errors,
+            errors: errors.clone(),
         };
 
+        // Determine validation result
         if validation_result.is_valid {
             Ok(validation_result)
         } else {
