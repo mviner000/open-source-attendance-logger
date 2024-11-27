@@ -17,7 +17,7 @@ pub enum Gender {
 }
 
 // Struct representing the School Account
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SchoolAccount {
     pub id: Uuid,
     pub school_id: String,
@@ -139,6 +139,24 @@ fn log_school_account_creation_attempt(
                 account.school_id, 
                 e
             );
+        }
+    }
+}
+
+impl From<CreateSchoolAccountRequest> for UpdateSchoolAccountRequest {
+    fn from(create_request: CreateSchoolAccountRequest) -> Self {
+        UpdateSchoolAccountRequest {
+            first_name: create_request.first_name,
+            middle_name: create_request.middle_name,
+            last_name: create_request.last_name,
+            gender: create_request.gender,
+            course: create_request.course,
+            department: create_request.department,
+            position: create_request.position,
+            major: create_request.major,
+            year_level: create_request.year_level,
+            is_active: Some(create_request.is_active),
+            last_updated_semester_id: create_request.last_updated_semester_id,
         }
     }
 }

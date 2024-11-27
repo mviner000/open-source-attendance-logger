@@ -14,12 +14,27 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { FileSpreadsheet, AlertCircle, CheckCircle2 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { FileSpreadsheet, AlertCircle, AlertTriangle } from 'lucide-react';
 import { CsvHeaderValidationErrors } from './CsvHeaderValidationErrors';
 import CsvContentValidationErrors from './CsvContentValidationErrors';
+import { SchoolAccount } from '@/lib/school_accounts';
 
 interface CsvImportComponentProps {
   onImportSuccess: () => void;
+}
+
+interface ExistingAccountInfo {
+  existing_accounts: SchoolAccount[];
+  new_accounts_count: number;
+  existing_accounts_count: number;
 }
 
 export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImportSuccess }) => {
@@ -28,9 +43,10 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
   const [isValidating, setIsValidating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [validationResult, setValidationResult] = useState<CsvValidationResult | null>(null);
+  const [existingAccountInfo, setExistingAccountInfo] = useState<ExistingAccountInfo | null>(null);
   const [importResult, setImportResult] = useState<CsvImportResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-
+  const [showUpdateConfirmation, setShowUpdateConfirmation] = useState(false);
   const [semesters, setSemesters] = useState<Semester[]>([]);
   const [selectedSemester, setSelectedSemester] = useState<Semester | null>(null);
 
@@ -51,28 +67,29 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
   const handleFileSelect = async () => {
     try {
       const selected = await open({
-        filters: [{
-          name: 'CSV',
-          extensions: ['csv']
-        }],
+        filters: [{ name: 'CSV', extensions: ['csv'] }],
         multiple: false,
         directory: false
       });
 
       if (selected) {
         setFullFilePath(selected);
-        // Truncate the displayed filename to show only the last part
-        const truncatedFileName = selected.split(/[\\/]/).pop() || selected;
-        setDisplayFileName(truncatedFileName);
-        setError(null);
-        setValidationResult(null);
-        setImportResult(null);
-        setSelectedSemester(null);
+        setDisplayFileName(selected.split(/[\\/]/).pop() || selected);
+        resetState();
       }
     } catch (err) {
       setError('Failed to select file');
       console.error(err);
     }
+  };
+
+  const resetState = () => {
+    setError(null);
+    setValidationResult(null);
+    setImportResult(null);
+    setSelectedSemester(null);
+    setExistingAccountInfo(null);
+    setShowUpdateConfirmation(false);
   };
 
   const validateFile = async () => {
@@ -87,49 +104,61 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
     try {
       const result = await CsvImportApi.validateCsvFile(fullFilePath);
       setValidationResult(result);
-      setIsValidating(false);
+      
+      if (result.is_valid) {
+        const accountInfo = await CsvImportApi.checkExistingAccounts(fullFilePath);
+        setExistingAccountInfo(accountInfo);
+      }
     } catch (err) {
       console.error('Validation error:', err);
       setError(err instanceof Error ? err.message : 'Validation failed');
+    } finally {
       setIsValidating(false);
     }
   };
 
-  const importFile = async () => {
-    if (!fullFilePath) {
-      setError('Please select a file first');
-      return;
-    }
-
-    if (!selectedSemester) {
-      setError('Please select a semester');
+  const importFile = async (forceUpdate: boolean = false) => {
+    if (!fullFilePath || !selectedSemester) {
+      setError('Please select both a file and semester');
       return;
     }
 
     setIsImporting(true);
     setError(null);
+    setShowUpdateConfirmation(false);
 
     try {
-      const importResult = await CsvImportApi.importCsvFile({
-        file_path: fullFilePath, 
-        semester_id: selectedSemester.id
+      const result = await CsvImportApi.importCsvFile({
+        file_path: fullFilePath,
+        semester_id: selectedSemester.id,
+        force_update: forceUpdate
       });
       
-      setImportResult(importResult);
+      setImportResult(result);
       
-      if (importResult.failed_imports === 0) {
+      if (result.failed_imports === 0) {
         onImportSuccess();
       }
-      
-      setIsImporting(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed');
+    } finally {
       setIsImporting(false);
     }
   };
 
+  const handleImportClick = () => {
+    // Using nullish coalescing operator to default to 0 if undefined
+    const existingAccountCount = existingAccountInfo?.existing_accounts_count ?? 0;
+      
+    if (existingAccountCount > 0) {
+      setShowUpdateConfirmation(true);
+    } else {
+      importFile(false);
+    }
+  };
+
   return (
-    <Card className="w-full max-w-xl mx-auto mt-8">
+    <Card className="w-full max-w-4xl">
       <CardHeader>
         <CardTitle className="flex items-center">
           <FileSpreadsheet className="mr-2" /> 
@@ -159,6 +188,32 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </Button>
           </div>
 
+          {existingAccountInfo && (
+            <Alert variant="default">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Account Overview</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p>New accounts to be created: {existingAccountInfo.new_accounts_count}</p>
+                <p>Existing accounts that will be updated: {existingAccountInfo.existing_accounts_count}</p>
+                {existingAccountInfo.existing_accounts.length > 0 && (
+                  <div className="mt-2">
+                    <p className="font-semibold">Accounts to be updated:</p>
+                    <ul className="list-disc list-inside mt-1">
+                      {existingAccountInfo.existing_accounts.slice(0, 5).map((account, index) => (
+                        <li key={index}>
+                          {account.school_id} - {account.first_name} {account.last_name}
+                        </li>
+                      ))}
+                      {existingAccountInfo.existing_accounts.length > 5 && (
+                        <li>... and {existingAccountInfo.existing_accounts.length - 5} more</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
           {validationResult?.is_valid && (
             <div className="space-y-2">
               <Select 
@@ -184,7 +239,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
 
           {validationResult?.is_valid && selectedSemester && (
             <Button 
-              onClick={importFile} 
+              onClick={handleImportClick} 
               disabled={isImporting}
               variant="default"
               className="w-full"
@@ -194,10 +249,6 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
           )}
 
           {validationResult && !validationResult.is_valid && (
-            <CsvHeaderValidationErrors errors={validationResult.validation_errors} />
-          )}
-
-          {validationResult && (
             <>
               {validationResult.validation_errors.some(err => err.row_number === 0) && (
                 <CsvHeaderValidationErrors errors={validationResult.validation_errors} />
@@ -210,36 +261,34 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
 
           {importResult && (
             <Alert variant={importResult.failed_imports === 0 ? 'default' : 'destructive'}>
-              {importResult.failed_imports === 0 ? (
-                <CheckCircle2 className="h-4 w-4" />
-              ) : (
-                <AlertCircle className="h-4 w-4" />
-              )}
-              <AlertTitle>
-                {importResult.failed_imports === 0 
-                  ? 'Import Successful' 
-                  : `Import Partially Failed (${importResult.failed_imports} errors)`}
-              </AlertTitle>
+              <AlertTitle>Import Results</AlertTitle>
               <AlertDescription>
-                Total Processed: {importResult.total_processed}
-                <br />
-                Successful Imports: {importResult.successful_imports}
-                <br />
-                Failed Imports: {importResult.failed_imports}
-                {importResult.failed_imports > 0 && (
-                  <>
-                    <br />
-                    Error Details:
-                    <ul className="list-disc list-inside">
-                      {importResult.error_details.slice(0, 5).map((err, index) => (
-                        <li key={index}>{err}</li>
-                      ))}
-                      {importResult.error_details.length > 5 && (
-                        <li>... and {importResult.error_details.length - 5} more</li>
-                      )}
-                    </ul>
-                  </>
-                )}
+                <div className="space-y-2">
+                  <p>Total Processed: {importResult.total_processed}</p>
+                  <p>Successfully Imported: {importResult.successful_imports}</p>
+                  <p>Failed Imports: {importResult.failed_imports}</p>
+                  
+                  {importResult.existing_account_info && (
+                    <>
+                      <p>New Accounts Created: {importResult.existing_account_info.new_accounts_count}</p>
+                      <p>Existing Accounts Updated: {importResult.existing_account_info.existing_accounts_count}</p>
+                    </>
+                  )}
+                  
+                  {importResult.failed_imports > 0 && (
+                    <div>
+                      <p className="font-semibold mt-2">Error Details:</p>
+                      <ul className="list-disc list-inside">
+                        {importResult.error_details.slice(0, 5).map((err, index) => (
+                          <li key={index}>{err}</li>
+                        ))}
+                        {importResult.error_details.length > 5 && (
+                          <li>... and {importResult.error_details.length - 5} more errors</li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               </AlertDescription>
             </Alert>
           )}
@@ -251,6 +300,37 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
+
+          <Dialog open={showUpdateConfirmation} onOpenChange={setShowUpdateConfirmation}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Confirm Update</DialogTitle>
+                <DialogDescription className="space-y-2">
+                  <p>You are about to:</p>
+                  <ul className="list-disc list-inside">
+                    <li>Update {existingAccountInfo?.existing_accounts_count} existing accounts</li>
+                    <li>Create {existingAccountInfo?.new_accounts_count} new accounts</li>
+                  </ul>
+                  <p className="font-semibold text-red-500">This action cannot be undone.</p>
+                  <p>Do you want to continue?</p>
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowUpdateConfirmation(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="default"
+                  onClick={() => importFile(true)}
+                >
+                  Continue with Update
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </CardContent>
     </Card>
