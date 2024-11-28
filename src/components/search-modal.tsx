@@ -63,10 +63,22 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, schoo
             </p>
             <div className="mt-2 max-h-[300px] overflow-y-auto">
               {searchResults.map((account) => (
-                <div key={account.id} className="border-b py-2">
-                  <p className="font-medium">{account.school_id}</p>
-                  <p>{`${account.first_name || ''} ${account.middle_name || ''} ${account.last_name || ''}`}</p>
-                  <p className="text-sm text-gray-500">{account.course || account.position}</p>
+                <div key={account.id} className="border-b py-2 flex items-center">
+                  <div className="flex-grow">
+                    <div className="flex items-center gap-2">
+                      <span 
+                        className={`h-2 w-2 rounded-full ${
+                          account.is_active ? 'bg-green-500' : 'bg-red-500'
+                        }`}
+                      />
+                      <p className="font-medium">{account.school_id}</p>
+                    </div>
+                    <p>{`${account.first_name || ''} ${account.middle_name || ''} ${account.last_name || ''}`}</p>
+                    <p className="text-sm text-gray-500">{account.course || account.position}</p>
+                  </div>
+                  <span className="text-xs text-gray-500">
+                    {account.is_active ? 'Active' : 'Inactive'}
+                  </span>
                 </div>
               ))}
             </div>
@@ -76,4 +88,3 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, schoo
     </Dialog>
   );
 };
-

@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import CsvImportComponent from './CsvImportComponent';
 import { SemesterModal } from './semester-modal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Loader2, Search } from 'lucide-react';
 import { SearchModal } from './search-modal';
