@@ -1,3 +1,5 @@
+// lib/csv_import.ts
+
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from './logger';
 import { Uuid } from '@/types/uuid';
@@ -46,6 +48,12 @@ export interface ImportSummary {
   processing_duration_ms: number;
 }
 
+export interface AccountStatusCounts {
+  total_accounts: number;
+  activated_accounts: number;
+  deactivated_accounts: number;
+}
+
 export interface CsvImportResponse {
   validation_result: CsvValidationResult;
   total_processed: number;
@@ -54,6 +62,7 @@ export interface CsvImportResponse {
   error_details: string[];
   existing_account_info?: ExistingAccountInfo;
   import_summary?: ImportSummary;
+  account_status_counts?: AccountStatusCounts;
 }
 
 export interface CsvImportRequest {

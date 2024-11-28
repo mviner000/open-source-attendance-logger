@@ -1,5 +1,3 @@
-// lib/school_accounts.ts
-
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from './logger';
 
@@ -65,5 +63,16 @@ export const SchoolAccountsApi = {
       logger.log(`Failed to update school account semester: ${error}`, 'error');
       throw error;
     }
+  },
+
+  // New method to extract unique courses
+  extractUniqueCourses(accounts: SchoolAccount[]): string[] {
+    return Array.from(
+      new Set(
+        accounts
+          .map(account => account.course)
+          .filter((course): course is string => course !== null && course.trim() !== '')
+      )
+    ).sort();
   }
 };

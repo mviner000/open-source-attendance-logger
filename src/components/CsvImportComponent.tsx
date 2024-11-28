@@ -274,6 +274,14 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
                     </>
                   )}
                   
+                  {importResult.account_status_counts && (
+                    <div>
+                      <p>Total Accounts in Database: {importResult.account_status_counts.total_accounts}</p>
+                      <p>Activated Accounts: {importResult.account_status_counts.activated_accounts}</p>
+                      <p>Deactivated Accounts: {importResult.account_status_counts.deactivated_accounts}</p>
+                    </div>
+                  )}
+                  
                   {importResult.failed_imports > 0 && (
                     <div>
                       <p className="font-semibold mt-2">Error Details:</p>

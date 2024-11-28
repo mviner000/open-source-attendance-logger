@@ -9,6 +9,14 @@ use crate::db::school_accounts::{SchoolAccount, CreateSchoolAccountRequest};
 use csv::StringRecord;
 use log::{info, error};
 
+#[derive(serde::Serialize, Debug)]
+pub struct AccountStatusCounts {
+    pub total_accounts: usize,
+    pub activated_accounts: usize,
+    pub deactivated_accounts: usize,
+
+}
+
 
 #[derive(serde::Serialize, Debug)]
 pub struct ExistingAccountInfo {
@@ -18,6 +26,7 @@ pub struct ExistingAccountInfo {
 }
 
 #[derive(serde::Serialize)]
+
 pub struct CsvImportResponse {
     validation_result: CsvValidationResult,
     total_processed: usize,
@@ -25,7 +34,10 @@ pub struct CsvImportResponse {
     failed_imports: usize,
     error_details: Vec<String>,
     existing_account_info: Option<ExistingAccountInfo>,
+    account_status_counts: Option<AccountStatusCounts>, // New field
+
 }
+
 
 // #[derive(serde::Deserialize)]
 // pub struct CsvImportRequest {
@@ -148,12 +160,13 @@ pub async fn validate_csv_file(
     }
 }
 
+
 #[command]
 pub async fn import_csv_file(
     state: State<'_, DbState>,
     file_path: String,
     semester_id: Uuid,
-    force_update: bool // New parameter to force update
+    force_update: bool
 ) -> Result<CsvImportResponse, String> {
     let path = Path::new(&file_path);
     
@@ -190,6 +203,30 @@ pub async fn import_csv_file(
     let batch_size = 100; // Configurable batch size
     let batched_records = batch_transform_records(&transformer, &records, batch_size);
     
+    // First, count total accounts before deactivation
+    let conn = state.0.get_cloned_connection();
+    let total_accounts_before: usize = conn.query_row(
+        "SELECT COUNT(*) FROM school_accounts",
+        [],
+        |row| row.get(0)
+    ).map_err(|e| format!("Failed to count total accounts: {}", e))?;
+    
+    // Count active accounts before deactivation
+    let active_accounts_before: usize = conn.query_row(
+        "SELECT COUNT(*) FROM school_accounts WHERE is_active = 1",
+        [],
+        |row| row.get(0)
+    ).map_err(|e| format!("Failed to count active accounts: {}", e))?;
+    
+    // Deactivate all accounts
+    conn.execute(
+        "UPDATE school_accounts SET is_active = 0",
+        []
+    ).map_err(|e| format!("Failed to deactivate existing accounts: {}", e))?;
+    
+    // Collect school_ids from the CSV to be set as active
+    let mut school_ids_to_activate = Vec::new();
+    
     // Prepare to track import results
     let mut total_processed = 0;
     let mut successful_imports = 0;
@@ -206,6 +243,9 @@ pub async fn import_csv_file(
             
             match result {
                 Ok(mut account_request) => {
+                    // Collect school_id for activation
+                    school_ids_to_activate.push(account_request.school_id.clone());
+                    
                     // Set the last_updated_semester_id for each account
                     account_request.last_updated_semester_id = Some(semester_id);
                     
@@ -257,6 +297,44 @@ pub async fn import_csv_file(
         }
     }
     
+    // Activate the imported accounts
+    let activated_accounts = if !school_ids_to_activate.is_empty() {
+        let placeholders = school_ids_to_activate.iter().map(|_| "?").collect::<Vec<&str>>().join(",");
+        let activate_query = format!(
+            "UPDATE school_accounts SET is_active = 1 WHERE school_id IN ({})",
+            placeholders
+        );
+        
+        let conn = state.0.get_cloned_connection();
+        let params: Vec<&dyn rusqlite::ToSql> = school_ids_to_activate.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+        
+        conn.execute(
+            &activate_query, 
+            params.as_slice()
+        ).map_err(|e| format!("Failed to activate imported accounts: {}", e))?;
+        
+        // Count activated accounts
+        let activated_count: usize = conn.query_row(
+            "SELECT COUNT(*) FROM school_accounts WHERE is_active = 1",
+            [],
+            |row| row.get(0)
+        ).map_err(|e| format!("Failed to count activated accounts: {}", e))?;
+        
+        activated_count
+    } else {
+        0
+    };
+    
+    // Count total accounts and deactivated accounts
+    let conn = state.0.get_cloned_connection();
+    let total_accounts_after: usize = conn.query_row(
+        "SELECT COUNT(*) FROM school_accounts",
+        [],
+        |row| row.get(0)
+    ).map_err(|e| format!("Failed to count total accounts: {}", e))?;
+    
+    let deactivated_accounts = total_accounts_after - activated_accounts;
+
     // Prepare response
     let import_response = CsvImportResponse {
         validation_result,
@@ -265,14 +343,24 @@ pub async fn import_csv_file(
         failed_imports,
         error_details,
         existing_account_info: Some(ExistingAccountInfo {
-            existing_accounts: existing_accounts.clone(), // Clone the existing accounts
+            existing_accounts: existing_accounts.clone(), 
             new_accounts_count: total_processed - existing_accounts.len(),
             existing_accounts_count: existing_accounts.len(),
+        }),
+        account_status_counts: Some(AccountStatusCounts {
+            total_accounts: total_accounts_after,
+            activated_accounts,
+            deactivated_accounts,
         }),
     };
     
     info!("CSV import completed: {} total, {} successful, {} failed, Semester={}", 
         total_processed, successful_imports, failed_imports, semester_id);
+    
+    info!("Account Status Counts:");
+    info!("  Total Accounts: {}", total_accounts_after);
+    info!("  Activated Accounts: {}", activated_accounts);
+    info!("  Deactivated Accounts: {}", deactivated_accounts);
     
     Ok(import_response)
 }
