@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SchoolAccountsApi, SchoolAccount } from '@/lib/school_accounts';
+import { SemesterApi, Semester } from '@/lib/semester';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import CsvImportComponent from './CsvImportComponent';
 import { SemesterModal } from './semester-modal';
@@ -19,14 +20,21 @@ const SchoolAccountsPage: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [courseFilter, setCourseFilter] = useState<string>('all');
   const [yearLevelFilter, setYearLevelFilter] = useState<string>('all');
+  const [semesterFilter, setSemesterFilter] = useState<string>('all');
   
   // Dropdown options
   const [courses, setCourses] = useState<string[]>([]);
   const [yearLevels, setYearLevels] = useState<string[]>([]);
+  const [semesters, setSemesters] = useState<Semester[]>([]);
 
-  const fetchSchoolAccounts = useCallback(async () => {
+  const fetchSchoolAccountsAndSemesters = useCallback(async () => {
     try {
       setLoading(true);
+      
+      // Fetch semesters first
+      const allSemesters = await SemesterApi.getAllSemesters();
+      setSemesters(allSemesters);
+
       const allAccounts = await SchoolAccountsApi.getAllSchoolAccounts();
       
       // Fetch semester details for each account
@@ -68,17 +76,17 @@ const SchoolAccountsPage: React.FC = () => {
 
       setLoading(false);
     } catch (err) {
-      setError('Failed to fetch school accounts');
+      setError('Failed to fetch school accounts and semesters');
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchSchoolAccounts();
-  }, [fetchSchoolAccounts]);
+    fetchSchoolAccountsAndSemesters();
+  }, [fetchSchoolAccountsAndSemesters]);
 
   const handleImportSuccess = () => {
-    fetchSchoolAccounts();
+    fetchSchoolAccountsAndSemesters();
   };
 
   // Filter accounts based on the selected filters
@@ -96,7 +104,11 @@ const SchoolAccountsPage: React.FC = () => {
       yearLevelFilter === 'all' || 
       (account.year_level !== null && account.year_level === yearLevelFilter);
     
-    return isActiveFilter && isCourseFilter && isYearLevelFilter;
+    const isSemesterFilter = 
+      semesterFilter === 'all' || 
+      (account.last_updated_semester?.id === semesterFilter);
+    
+    return isActiveFilter && isCourseFilter && isYearLevelFilter && isSemesterFilter;
   });
 
   // Render loading state
@@ -116,7 +128,7 @@ const SchoolAccountsPage: React.FC = () => {
     return (
       <div className="p-4 text-red-500">
         <p>{error}</p>
-        <Button onClick={fetchSchoolAccounts} className="mt-4">
+        <Button onClick={fetchSchoolAccountsAndSemesters} className="mt-4">
           Retry Fetching
         </Button>
       </div>
@@ -184,6 +196,24 @@ const SchoolAccountsPage: React.FC = () => {
               </SelectContent>
             </Select>
 
+            {/* Semester Filter Dropdown */}
+            <Select 
+              value={semesterFilter} 
+              onValueChange={(value) => setSemesterFilter(value)}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by Semester" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Semesters</SelectItem>
+                {semesters.map((semester) => (
+                  <SelectItem key={semester.id} value={semester.id}>
+                    {semester.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             {/* Status Counts */}
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
@@ -192,7 +222,7 @@ const SchoolAccountsPage: React.FC = () => {
               </div>
               <div className="flex items-center space-x-2">
                 <span className="w-3 h-3 rounded-full bg-red-500" />
-                <span >Inactive: {inactiveCount}</span>
+                <span>Inactive: {inactiveCount}</span>
               </div>
             </div>
           </div>
