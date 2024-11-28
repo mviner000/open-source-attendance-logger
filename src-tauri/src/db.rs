@@ -11,10 +11,15 @@ pub mod school_accounts;
 pub mod csv_import;
 pub mod csv_transform;
 pub mod semester;
+pub mod attendance;
+pub mod purpose;
+
 use notes::NotesDatabase;
 use auth::AuthDatabase;
 use school_accounts::{SchoolAccountRepository, SqliteSchoolAccountRepository};
 use semester::{SemesterRepository, SqliteSemesterRepository};
+use attendance::{AttendanceRepository, SqliteAttendanceRepository};
+use purpose::{PurposeRepository, SqlitePurposeRepository};
 use tokio::sync::RwLock;
 use std::sync::Arc;
 
@@ -30,10 +35,11 @@ pub struct Database {
     pub auth: AuthDatabase,
     pub school_accounts: Arc<dyn SchoolAccountRepository + Send + Sync>,
     pub semester_repository: Box<dyn SemesterRepository + Send + Sync>,
+    pub attendance_repository: Arc<dyn AttendanceRepository + Send + Sync>,
+    pub purpose_repository: Arc<dyn PurposeRepository + Send + Sync>,
     db_path: PathBuf,
 }
 
-// Implement Clone manually to allow cloning with Arc
 impl Clone for Database {
     fn clone(&self) -> Self {
         let new_conn = Connection::open(&self.db_path)
@@ -45,11 +51,12 @@ impl Clone for Database {
             auth: self.auth.clone(),
             school_accounts: Arc::clone(&self.school_accounts),
             semester_repository: Box::new(SqliteSemesterRepository) as Box<dyn SemesterRepository + Send + Sync>,
+            attendance_repository: Arc::new(SqliteAttendanceRepository) as Arc<dyn AttendanceRepository + Send + Sync>,
+            purpose_repository: Arc::new(SqlitePurposeRepository) as Arc<dyn PurposeRepository + Send + Sync>,
             db_path: self.db_path.clone(),
         }
     }
 }
-
 
 impl Database {
     pub fn new(_app_handle: &AppHandle) -> Result<Self> {
@@ -78,6 +85,8 @@ impl Database {
         info!("Creating database tables...");
         school_accounts::create_school_accounts_table(&conn)?;
         semester::create_semesters_table(&conn)?;
+        purpose::create_purposes_table(&conn)?;
+        attendance::create_attendance_table(&conn)?;
         
         let notes_db = NotesDatabase::init(&conn)?;
         let auth_db = AuthDatabase::init(&conn)?;
@@ -86,6 +95,8 @@ impl Database {
         let school_accounts_db: Arc<dyn SchoolAccountRepository + Send + Sync> = 
             Arc::new(SqliteSchoolAccountRepository);
         let semester_repository = Box::new(SqliteSemesterRepository) as Box<dyn SemesterRepository + Send + Sync>;
+        let attendance_repository = Arc::new(SqliteAttendanceRepository) as Arc<dyn AttendanceRepository + Send + Sync>;
+        let purpose_repository = Arc::new(SqlitePurposeRepository) as Arc<dyn PurposeRepository + Send + Sync>;
         
         info!("Database initialization completed successfully");
         Ok(Database {
@@ -94,17 +105,17 @@ impl Database {
             auth: auth_db,
             school_accounts: school_accounts_db,
             semester_repository,
+            attendance_repository,
+            purpose_repository,
             db_path,
         })
     }
 
-    // Add this method for blocking connection retrieval
     pub fn get_connection_blocking(&self) -> Connection {
         Connection::open(&self.db_path)
             .expect("Failed to open a new database connection")
     }
 
-    // Modify this method to use blocking connection
     pub fn with_connection_blocking<F, T>(&self, f: F) -> Result<T>
     where
         F: FnOnce(&Connection) -> Result<T>
@@ -113,7 +124,6 @@ impl Database {
         f(&conn)
     }
 
-    // Existing methods remain the same...
     pub async fn with_connection<F, T>(&self, f: F) -> Result<T>
     where
         F: FnOnce(&Connection) -> Result<T>
@@ -141,7 +151,6 @@ impl Database {
     }
 }
 
-// Helper function to get the database path
 fn get_database_path(db_dir: &PathBuf) -> Result<PathBuf, String> {
     let db_name = config::load_database_name()
         .map_err(|e| format!("Failed to load database name: {}", e))?;

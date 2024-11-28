@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Loader2, Search } from 'lucide-react';
 import { SearchModal } from './search-modal';
+import { PurposeModal } from './purpose-modal';
 
 const SchoolAccountsPage: React.FC = () => {
   const [schoolAccounts, setSchoolAccounts] = useState<SchoolAccount[]>([]);
@@ -148,13 +149,21 @@ const SchoolAccountsPage: React.FC = () => {
                 </CardContent>
               </Card>
               <Card>
-                <CardHeader>
-                  <CardTitle>Manage Semesters</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <SemesterModal onUpdate={handleSemesterUpdate} />
-                </CardContent>
-              </Card>
+              <CardHeader>
+                <CardTitle>Manage Semesters</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <SemesterModal onUpdate={handleSemesterUpdate} />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Manage Purposes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PurposeModal onUpdate={fetchSchoolAccountsAndSemesters} />
+              </CardContent>
+            </Card>
             </div>
             <Card>
               <CardHeader>

@@ -9,6 +9,7 @@ mod notes_commands;
 mod school_account_commands;
 mod csv_commands;
 mod semester_commands;
+mod purpose_commands;
 
 use tauri::Manager;
 use db::{Database, init_db, DatabaseInfo};
@@ -114,6 +115,13 @@ pub fn run() {
             semester_commands::get_semester_by_label,
             semester_commands::update_semester,
             semester_commands::delete_semester,
+            purpose_commands::create_purpose,
+            purpose_commands::get_all_purposes,
+            purpose_commands::get_purpose,
+            purpose_commands::get_purpose_by_label,
+            purpose_commands::update_purpose,
+            purpose_commands::soft_delete_purpose,
+            purpose_commands::restore_purpose,
             check_network,
             get_credentials,
             get_database_info

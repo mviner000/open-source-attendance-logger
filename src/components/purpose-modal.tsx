@@ -1,7 +1,7 @@
-// components/semester-modal.tsx
+// components/purpose-modal.tsx
 
 import * as React from "react"
-import { Plus, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Loader2, RotateCw } from 'lucide-react'
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -42,73 +42,83 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 
-import { Semester, SemesterApi } from "@/lib/semester"
+import { Purpose, PurposeApi, CreatePurposeRequest } from "@/lib/purpose"
+import { IconSelector } from "@/components/icon-selector"
 
 const formSchema = z.object({
   label: z.string().min(1, "Label is required"),
+  icon_name: z.string().min(1, "Icon is required"),
 })
 
 type FormData = z.infer<typeof formSchema>
 
-interface SemesterModalProps {
+interface PurposeModalProps {
   onUpdate: () => void;
 }
 
-export function SemesterModal({ onUpdate }: SemesterModalProps) {
-  const [semesters, setSemesters] = React.useState<Semester[]>([])
+export function PurposeModal({ onUpdate }: PurposeModalProps) {
+  const [purposes, setPurposes] = React.useState<Purpose[]>([])
   const [loading, setLoading] = React.useState(false)
   const [deleteConfirm, setDeleteConfirm] = React.useState<string | null>(null)
   const [open, setOpen] = React.useState(false)
+  const [showDeleted, setShowDeleted] = React.useState(false)
   const { toast } = useToast()
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const editFormRef = React.useRef<HTMLInputElement>(null);
+  const [selectedIcon, setSelectedIcon] = React.useState<string | null>(null);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       label: "",
+      icon_name: "",
     },
   })
 
-  const loadSemesters = React.useCallback(async () => {
+  const loadPurposes = React.useCallback(async () => {
     try {
-      const data = await SemesterApi.getAllSemesters()
-      setSemesters(data)
+      const data = await PurposeApi.getAllPurposes(showDeleted)
+      setPurposes(data)
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Error loading semesters",
+        title: "Error loading purposes",
         description: String(error),
       })
     }
-  }, [toast])
+  }, [toast, showDeleted])
 
   React.useEffect(() => {
-    loadSemesters()
-  }, [loadSemesters])
+    loadPurposes()
+  }, [loadPurposes])
 
-  const createSemester = async (data: FormData) => {
+  const createPurpose = async (data: FormData) => {
     setLoading(true)
     try {
-      await SemesterApi.createSemester(
-        data,
+      await PurposeApi.createPurpose(
+        {
+          label: data.label,
+          icon_name: selectedIcon || data.icon_name
+        },
         "admin", // Replace with actual credentials
         "your_password"
       )
       toast({
-        title: "Semester created",
-        description: `Successfully created semester "${data.label}"`,
+        title: "Purpose created",
+        description: `Successfully created purpose "${data.label}"`,
       })
-      await loadSemesters()
+      await loadPurposes()
       form.reset()
+      setSelectedIcon(null)
       onUpdate()
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Error creating semester",
+        title: "Error creating purpose",
         description: String(error),
       })
     } finally {
@@ -116,25 +126,28 @@ export function SemesterModal({ onUpdate }: SemesterModalProps) {
     }
   }
 
-  const updateSemester = async (id: string, label: string) => {
+  const updatePurpose = async (id: string, label: string, iconName: string) => {
     setLoading(true)
     try {
-      await SemesterApi.updateSemester(
+      await PurposeApi.updatePurpose(
         id,
-        { label },
+        { 
+          label, 
+          icon_name: iconName 
+        },
         "admin", // Replace with actual credentials
         "your_password"
       )
       toast({
-        title: "Semester updated",
-        description: `Successfully updated semester`,
+        title: "Purpose updated",
+        description: `Successfully updated purpose`,
       })
-      await loadSemesters()
+      await loadPurposes()
       onUpdate()
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Error updating semester",
+        title: "Error updating purpose",
         description: String(error),
       })
     } finally {
@@ -143,29 +156,53 @@ export function SemesterModal({ onUpdate }: SemesterModalProps) {
     }
   }
 
-  const handleDelete = async (id: string) => {
+  const handleSoftDelete = async (id: string) => {
     setLoading(true)
     try {
-      await SemesterApi.deleteSemester(
+      await PurposeApi.softDeletePurpose(
         id,
         "admin", // Replace with actual credentials
         "your_password"
       )
-      await loadSemesters()
+      await loadPurposes()
       toast({
-        title: "Semester deleted",
-        description: "Successfully deleted the semester",
+        title: "Purpose soft deleted",
+        description: "Successfully soft deleted the purpose",
       })
       onUpdate()
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Error deleting semester",
+        title: "Error soft deleting purpose",
         description: String(error),
       })
     } finally {
       setLoading(false)
-      setDeleteConfirm(null)
+    }
+  }
+
+  const handleRestore = async (id: string) => {
+    setLoading(true)
+    try {
+      await PurposeApi.restorePurpose(
+        id,
+        "admin", // Replace with actual credentials
+        "your_password"
+      )
+      await loadPurposes()
+      toast({
+        title: "Purpose restored",
+        description: "Successfully restored the purpose",
+      })
+      onUpdate()
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error restoring purpose",
+        description: String(error),
+      })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -184,33 +221,40 @@ export function SemesterModal({ onUpdate }: SemesterModalProps) {
     <>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline">Manage Semesters</Button>
+          <Button variant="outline">Manage Purposes</Button>
         </DialogTrigger>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Manage Semesters</DialogTitle>
+            <DialogTitle>Manage Purposes</DialogTitle>
             <DialogDescription>
-              Add or remove semesters. Click on a semester label to edit it.
+              Add or manage purposes. Click on a purpose label to edit it.
             </DialogDescription>
           </DialogHeader>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(createSemester)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(createPurpose)} className="space-y-4">
               <FormField
                 control={form.control}
                 name="label"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>New Semester</FormLabel>
+                    <FormLabel>New Purpose</FormLabel>
                     <FormControl>
                       <div className="flex gap-2">
                         <Input 
-                          placeholder="e.g. Fall 2024" 
+                          placeholder="e.g. Study" 
                           {...field} 
                           disabled={loading}
                           ref={inputRef}
                         />
-                        <Button type="submit" disabled={loading}>
+                        <IconSelector 
+                          selectedIcon={selectedIcon} 
+                          onIconSelect={(icon) => {
+                            setSelectedIcon(icon)
+                            form.setValue('icon_name', icon)
+                          }} 
+                        />
+                        <Button type="submit" disabled={loading || !selectedIcon}>
                           {loading ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
@@ -226,57 +270,95 @@ export function SemesterModal({ onUpdate }: SemesterModalProps) {
             </form>
           </Form>
 
+          <div className="flex items-center space-x-2 mt-4">
+            <Checkbox 
+              id="show-deleted"
+              checked={showDeleted}
+              onCheckedChange={(checked) => setShowDeleted(!!checked)}
+            />
+            <label
+              htmlFor="show-deleted"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Show Deleted Purposes
+            </label>
+          </div>
+
           <div className="mt-6">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Label</TableHead>
+                  <TableHead>Icon</TableHead>
                   <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {semesters.map((semester) => (
-                  <TableRow key={semester.id}>
+                {purposes.map((purpose) => (
+                  <TableRow key={purpose.id} 
+                    className={purpose.is_deleted ? "opacity-50 bg-muted" : ""}
+                  >
                     <TableCell>
-                      {editingId === semester.id ? (
+                      {editingId === purpose.id ? (
                         <Input
-                          defaultValue={semester.label}
+                          defaultValue={purpose.label}
                           ref={editFormRef}
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
-                              updateSemester(semester.id, e.currentTarget.value)
+                              updatePurpose(
+                                purpose.id, 
+                                e.currentTarget.value, 
+                                purpose.icon_name
+                              )
                             } else if (e.key === "Escape") {
                               setEditingId(null)
                             }
                           }}
                           onBlur={() => setEditingId(null)}
                           className="max-w-[200px]"
+                          disabled={purpose.is_deleted}
                         />
                       ) : (
                         <span
-                          className="cursor-pointer hover:underline"
-                          onClick={() => setEditingId(semester.id)}
+                          className={`cursor-pointer hover:underline ${
+                            purpose.is_deleted ? "text-muted-foreground" : ""
+                          }`}
+                          onClick={() => !purpose.is_deleted && setEditingId(purpose.id)}
                         >
-                          {semester.label}
+                          {purpose.label}
                         </span>
                       )}
                     </TableCell>
+                    <TableCell>
+                      {purpose.icon_name}
+                    </TableCell>
                     <TableCell className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setDeleteConfirm(semester.id)}
-                        disabled={loading}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {purpose.is_deleted ? (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => handleRestore(purpose.id)}
+                          disabled={loading}
+                        >
+                          <RotateCw className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleteConfirm(purpose.id)}
+                          disabled={loading}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
-          <div className="mt-6 flex justify-end">
+          <div className="hidden mt-6 flex justify-end">
             <Button onClick={handleCloseModal}>Done</Button>
           </div>
         </DialogContent>
@@ -285,19 +367,19 @@ export function SemesterModal({ onUpdate }: SemesterModalProps) {
       <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitle>Soft Delete Purpose?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the semester
-              and all related data.
+              This will mark the purpose as deleted but keep it in the database 
+              so existing records can still reference it. You can restore it later.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
+              onClick={() => deleteConfirm && handleSoftDelete(deleteConfirm)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              Soft Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
