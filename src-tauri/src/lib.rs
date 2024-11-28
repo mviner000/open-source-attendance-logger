@@ -10,6 +10,7 @@ mod school_account_commands;
 mod csv_commands;
 mod semester_commands;
 mod purpose_commands;
+mod attendance_commands;
 
 use tauri::Manager;
 use db::{Database, init_db, DatabaseInfo};
@@ -122,6 +123,13 @@ pub fn run() {
             purpose_commands::update_purpose,
             purpose_commands::soft_delete_purpose,
             purpose_commands::restore_purpose,
+            attendance_commands::create_attendance,
+            attendance_commands::get_all_attendances,
+            attendance_commands::get_attendance,
+            attendance_commands::update_attendance,
+            attendance_commands::delete_attendance,
+            attendance_commands::get_attendances_by_semester,
+            attendance_commands::get_attendances_by_school_account,
             check_network,
             get_credentials,
             get_database_info

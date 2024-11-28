@@ -24,6 +24,14 @@ pub struct CreateAttendanceRequest {
     pub purpose_id: Option<Uuid>,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct UpdateAttendanceRequest {
+    pub school_id: Option<String>,
+    pub full_name: Option<String>,
+    pub classification: Option<String>,
+    pub purpose_id: Option<Uuid>,
+}
+
 pub trait AttendanceRepository: Send {
     fn create_attendance(&self, conn: &Connection, attendance: CreateAttendanceRequest) -> Result<Attendance>;
     fn get_attendance(&self, conn: &Connection, id: Uuid) -> Result<Attendance>;
@@ -31,6 +39,9 @@ pub trait AttendanceRepository: Send {
     fn delete_attendance(&self, conn: &Connection, id: Uuid) -> Result<()>;
     fn get_all_attendances(&self, conn: &Connection) -> Result<Vec<Attendance>>;
     fn search_attendances(&self, conn: &Connection, query: &str) -> Result<Vec<Attendance>>;
+    fn update_attendance(&self, conn: &Connection, id: Uuid, attendance: UpdateAttendanceRequest) -> Result<Attendance>;
+    fn get_attendances_by_semester(&self, conn: &Connection, semester_id: Uuid) -> Result<Vec<Attendance>>;
+    fn get_attendances_by_school_account(&self, conn: &Connection, school_account_id: Uuid) -> Result<Vec<Attendance>>;
 }
 
 pub struct SqliteAttendanceRepository;
@@ -149,6 +160,80 @@ impl AttendanceRepository for SqliteAttendanceRepository {
         Ok(attendances)
     }
 
+    fn get_attendances_by_semester(&self, conn: &Connection, semester_id: Uuid) -> Result<Vec<Attendance>> {
+        let mut stmt = conn.prepare(
+            "SELECT * FROM attendance 
+             JOIN semester_accounts ON attendance.school_id = semester_accounts.school_id 
+             WHERE semester_accounts.semester_id = ?1 
+             ORDER BY attendance.time_in_date DESC"
+        )?;
+        
+        let attendance_iter = stmt.query_map(params![semester_id.to_string()], |row| {
+            let time_in_str: String = row.get(3)?;
+            let time_in_date = DateTime::parse_from_rfc3339(&time_in_str)
+                .map(|dt| dt.with_timezone(&Utc))
+                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
+                    3,
+                    rusqlite::types::Type::Text,
+                    Box::new(e)
+                ))?;
+
+            Ok(Attendance {
+                id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
+                school_id: row.get(1)?,
+                full_name: row.get(2)?,
+                time_in_date,
+                classification: row.get(4)?,
+                purpose_id: row.get::<_, Option<String>>(5)?.map(|id| Uuid::parse_str(&id).unwrap()),
+            })
+        })?;
+
+        let mut attendances = Vec::new();
+        for attendance in attendance_iter {
+            attendances.push(attendance?);
+        }
+
+        Ok(attendances)
+    }
+
+    fn get_attendances_by_school_account(&self, conn: &Connection, school_account_id: Uuid) -> Result<Vec<Attendance>> {
+        let mut stmt = conn.prepare(
+            "SELECT * FROM attendance 
+             WHERE school_id = (
+                 SELECT school_id FROM school_accounts 
+                 WHERE id = ?1
+             ) 
+             ORDER BY time_in_date DESC"
+        )?;
+        
+        let attendance_iter = stmt.query_map(params![school_account_id.to_string()], |row| {
+            let time_in_str: String = row.get(3)?;
+            let time_in_date = DateTime::parse_from_rfc3339(&time_in_str)
+                .map(|dt| dt.with_timezone(&Utc))
+                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
+                    3,
+                    rusqlite::types::Type::Text,
+                    Box::new(e)
+                ))?;
+
+            Ok(Attendance {
+                id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
+                school_id: row.get(1)?,
+                full_name: row.get(2)?,
+                time_in_date,
+                classification: row.get(4)?,
+                purpose_id: row.get::<_, Option<String>>(5)?.map(|id| Uuid::parse_str(&id).unwrap()),
+            })
+        })?;
+
+        let mut attendances = Vec::new();
+        for attendance in attendance_iter {
+            attendances.push(attendance?);
+        }
+
+        Ok(attendances)
+    }
+
     fn delete_attendance(&self, conn: &Connection, id: Uuid) -> Result<()> {
         conn.execute(
             "DELETE FROM attendance WHERE id = ?1",
@@ -189,6 +274,58 @@ impl AttendanceRepository for SqliteAttendanceRepository {
         }
 
         Ok(attendances)
+    }
+
+    fn update_attendance(&self, conn: &Connection, id: Uuid, attendance: UpdateAttendanceRequest) -> Result<Attendance> {
+        let mut update_parts = Vec::new();
+        let mut params_values: Vec<String> = Vec::new();
+        let mut param_count = 1;
+    
+        if let Some(school_id) = &attendance.school_id {
+            update_parts.push(format!("school_id = ?{}", param_count));
+            params_values.push(school_id.clone());
+            param_count += 1;
+        }
+    
+        if let Some(full_name) = &attendance.full_name {
+            update_parts.push(format!("full_name = ?{}", param_count));
+            params_values.push(full_name.clone());
+            param_count += 1;
+        }
+    
+        if let Some(classification) = &attendance.classification {
+            update_parts.push(format!("classification = ?{}", param_count));
+            params_values.push(classification.clone());
+            param_count += 1;
+        }
+    
+        if let Some(purpose_id) = &attendance.purpose_id {
+            update_parts.push(format!("purpose_id = ?{}", param_count));
+            params_values.push(purpose_id.to_string());
+            param_count += 1;
+        }
+    
+        if update_parts.is_empty() {
+            // If no updates are provided, return the existing record
+            return self.get_attendance(conn, id);
+        }
+    
+        let sql = format!(
+            "UPDATE attendance SET {} WHERE id = ?{}",
+            update_parts.join(", "),
+            param_count
+        );
+    
+        params_values.push(id.to_string());
+    
+        // Use the params! macro to create parameters
+        let result = conn.execute(
+            &sql, 
+            rusqlite::params_from_iter(params_values.iter().map(|v| v.as_str()))
+        )?;
+    
+        // Retrieve and return the updated record
+        self.get_attendance(conn, id)
     }
 
     fn search_attendances(&self, conn: &Connection, query: &str) -> Result<Vec<Attendance>> {

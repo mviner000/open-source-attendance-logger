@@ -1,3 +1,5 @@
+// src/db.rs
+
 use log::{info, warn};
 use rusqlite::{Connection, Result};
 use tauri::AppHandle;
