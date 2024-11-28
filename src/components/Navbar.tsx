@@ -43,12 +43,12 @@ const Navbar: React.FC = () => {
               >
                 School Accounts
               </Link>
-              <Link 
+              {/* <Link 
                 to="/notes" 
                 className="border-transparent text-gray-300 hover:border-gray-100 hover:text-gray-100 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-bold"
               >
                 Notes
-              </Link>
+              </Link> */}
               <Link 
                 to="/attendance" 
                 className="border-transparent text-gray-300 hover:border-gray-100 hover:text-gray-100 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-bold"
