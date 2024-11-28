@@ -19,7 +19,7 @@ pub struct Attendance {
 #[derive(Debug, Deserialize, Clone)]
 pub struct CreateAttendanceRequest {
     pub school_id: String,
-    pub full_name: String,
+    pub full_name: String, // This can still be provided, but will be overridden if found in school_accounts
     pub classification: String,
     pub purpose_id: Option<Uuid>,
 }
@@ -50,23 +50,56 @@ impl AttendanceRepository for SqliteAttendanceRepository {
     fn create_attendance(&self, conn: &Connection, attendance: CreateAttendanceRequest) -> Result<Attendance> {
         info!("Creating new attendance record for school_id: {}", attendance.school_id);
         
+        // First, look up the school account to validate, get full name, and determine classification
+        let (full_name, classification) = match conn.query_row(
+            "SELECT 
+                COALESCE(
+                    CASE 
+                        WHEN first_name IS NOT NULL AND middle_name IS NOT NULL AND last_name IS NOT NULL THEN 
+                            first_name || ' ' || middle_name || ' ' || last_name
+                        WHEN first_name IS NOT NULL AND last_name IS NOT NULL THEN 
+                            first_name || ' ' || last_name
+                        ELSE first_name
+                    END, 
+                    ?1
+                ) as computed_full_name,
+                COALESCE(course, 'Faculty') as computed_classification
+            FROM school_accounts 
+            WHERE school_id = ?2",
+            params![attendance.full_name, attendance.school_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?
+                ))
+            }
+        ) {
+            Ok((name, class_type)) => (name, class_type),
+            Err(_) => {
+                // If no school account found, use the provided full name and default classification
+                if attendance.full_name.is_empty() {
+                    let err = rusqlite::Error::InvalidParameterName("School ID not found and no full name provided".to_string());
+                    error!("Failed to create attendance record: {}", err);
+                    return Err(err);
+                }
+                (attendance.full_name.clone(), "Faculty".to_string())
+            }
+        };
+        
+        // Generate a new UUID for the attendance record
         let id = Uuid::new_v4();
         let time_in_date = Utc::now();
         
+        // Validate required fields
         if attendance.school_id.is_empty() {
             let err = rusqlite::Error::InvalidParameterName("School ID cannot be empty".to_string());
             error!("Failed to create attendance record: {}", err);
             return Err(err);
         }
-
-        if attendance.full_name.is_empty() {
-            let err = rusqlite::Error::InvalidParameterName("Full name cannot be empty".to_string());
-            error!("Failed to create attendance record: {}", err);
-            return Err(err);
-        }
-
+        
         let time_in_str = time_in_date.to_rfc3339();
-
+        
+        // Insert the attendance record with dynamically determined classification
         conn.execute(
             "INSERT INTO attendance (
                 id, school_id, full_name, time_in_date, classification, purpose_id
@@ -74,28 +107,30 @@ impl AttendanceRepository for SqliteAttendanceRepository {
             params![
                 id.to_string(),
                 attendance.school_id,
-                attendance.full_name,
+                full_name,
                 time_in_str,
-                attendance.classification,
+                classification,
                 attendance.purpose_id.map(|id| id.to_string())
             ],
         )?;
-
+        
+        // Construct and return the Attendance struct
         let created_attendance = Attendance {
             id,
             school_id: attendance.school_id,
-            full_name: attendance.full_name,
+            full_name,
             time_in_date,
-            classification: attendance.classification,
+            classification,
             purpose_id: attendance.purpose_id,
         };
-
+        
         info!(
-            "Successfully created attendance record: ID={}, SchoolID={}",
+            "Successfully created attendance record: ID={}, SchoolID={}, Classification={}",
             created_attendance.id,
-            created_attendance.school_id
+            created_attendance.school_id,
+            created_attendance.classification
         );
-
+        
         Ok(created_attendance)
     }
 
