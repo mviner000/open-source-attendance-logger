@@ -1,5 +1,3 @@
-// CsvImportComponent.tsx
-
 import React, { useState, useEffect } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { CsvImportApi, CsvValidationResult, CsvImportResponse } from '../lib/csv_import';
@@ -22,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { FileSpreadsheet, AlertCircle, AlertTriangle } from 'lucide-react';
+import { FileSpreadsheet, AlertCircle, AlertTriangle, CheckCircle } from 'lucide-react';
 import { CsvHeaderValidationErrors } from './CsvHeaderValidationErrors';
 import CsvContentValidationErrors from './CsvContentValidationErrors';
 import { SchoolAccount } from '@/lib/school_accounts';
@@ -49,6 +47,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
   const [showUpdateConfirmation, setShowUpdateConfirmation] = useState(false);
   const [semesters, setSemesters] = useState<Semester[]>([]);
   const [selectedSemester, setSelectedSemester] = useState<Semester | null>(null);
+  const [showStatistics, setShowStatistics] = useState(false);
 
   useEffect(() => {
     const fetchSemesters = async () => {
@@ -90,6 +89,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
     setSelectedSemester(null);
     setExistingAccountInfo(null);
     setShowUpdateConfirmation(false);
+    setShowStatistics(false);
   };
 
   const validateFile = async () => {
@@ -105,7 +105,6 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
       const result = await CsvImportApi.validateCsvFile(fullFilePath);
       setValidationResult(result);
       
-      // This will still work the same way
       const accountInfo = await CsvImportApi.checkExistingAccounts(fullFilePath);
       setExistingAccountInfo(accountInfo);
     } catch (err) {
@@ -134,10 +133,16 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
       });
       
       setImportResult(result);
+      setShowStatistics(true);
       
       if (result.failed_imports === 0) {
-        onImportSuccess();
+        // Delay the onImportSuccess call to ensure statistics are shown
+        setTimeout(() => {
+          onImportSuccess();
+        }, 5000); // 5 seconds delay, adjust as needed
       }
+
+      return result;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed');
     } finally {
@@ -146,7 +151,6 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
   };
 
   const handleImportClick = () => {
-    // Using nullish coalescing operator to default to 0 if undefined
     const existingAccountCount = existingAccountInfo?.existing_accounts_count ?? 0;
       
     if (existingAccountCount > 0) {
@@ -258,14 +262,14 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </>
           )}
 
-          {importResult && (
-            <Alert variant={importResult.failed_imports === 0 ? 'default' : 'destructive'}>
-              <AlertTitle>Import Results</AlertTitle>
+          {importResult && importResult.failed_imports === 0 && (
+            <Alert variant="default">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              <AlertTitle className="text-green-500">Import Successful</AlertTitle>
               <AlertDescription>
                 <div className="space-y-2">
                   <p>Total Processed: {importResult.total_processed}</p>
                   <p>Successfully Imported: {importResult.successful_imports}</p>
-                  <p>Failed Imports: {importResult.failed_imports}</p>
                   
                   {importResult.existing_account_info && (
                     <>
@@ -274,27 +278,46 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
                     </>
                   )}
                   
-                  {importResult.account_status_counts && (
-                    <div>
-                      <p>Total Accounts in Database: {importResult.account_status_counts.total_accounts}</p>
-                      <p>Activated Accounts: {importResult.account_status_counts.activated_accounts}</p>
-                      <p>Deactivated Accounts: {importResult.account_status_counts.deactivated_accounts}</p>
-                    </div>
-                  )}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {showStatistics && importResult && importResult.account_status_counts && (
+            <Alert variant="default">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              <AlertTitle className="text-green-500">Import Successful - Account Statistics</AlertTitle>
+              <AlertDescription>
+                <div className="space-y-2">
+                  <p>Total Accounts in Database: {importResult.account_status_counts.total_accounts}</p>
+                  <p>Activated Accounts: {importResult.account_status_counts.activated_accounts}</p>
+                  <p>Deactivated Accounts: {importResult.account_status_counts.deactivated_accounts}</p>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {importResult && importResult.failed_imports > 0 && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Import Completed with Errors</AlertTitle>
+              <AlertDescription>
+                <div className="space-y-2">
+                  <p>Total Processed: {importResult.total_processed}</p>
+                  <p>Successfully Imported: {importResult.successful_imports}</p>
+                  <p>Failed Imports: {importResult.failed_imports}</p>
                   
-                  {importResult.failed_imports > 0 && (
-                    <div>
-                      <p className="font-semibold mt-2">Error Details:</p>
-                      <ul className="list-disc list-inside">
-                        {importResult.error_details.slice(0, 5).map((err, index) => (
-                          <li key={index}>{err}</li>
-                        ))}
-                        {importResult.error_details.length > 5 && (
-                          <li>... and {importResult.error_details.length - 5} more errors</li>
-                        )}
-                      </ul>
-                    </div>
-                  )}
+                  <div>
+                    <p className="font-semibold mt-2">Error Details:</p>
+                    <ul className="list-disc list-inside">
+                      {importResult.error_details.slice(0, 5).map((err, index) => (
+                        <li key={index}>{err}</li>
+                      ))}
+                      {importResult.error_details.length > 5 && (
+                        <li>... and {importResult.error_details.length - 5} more errors</li>
+                      )}
+                    </ul>
+                  </div>
                 </div>
               </AlertDescription>
             </Alert>
@@ -331,7 +354,13 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
                 </Button>
                 <Button
                   variant="default"
-                  onClick={() => importFile(true)}
+                  onClick={async () => {
+                    const result = await importFile(true);
+                    if (result && result.failed_imports === 0) {
+                      setShowStatistics(true);
+                      setShowUpdateConfirmation(false);
+                    }
+                  }}
                 >
                   Continue with Update
                 </Button>
