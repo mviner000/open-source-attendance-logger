@@ -52,7 +52,11 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>
 
-export function SemesterModal() {
+interface SemesterModalProps {
+  onUpdate: () => void;
+}
+
+export function SemesterModal({ onUpdate }: SemesterModalProps) {
   const [semesters, setSemesters] = React.useState<Semester[]>([])
   const [loading, setLoading] = React.useState(false)
   const [deleteConfirm, setDeleteConfirm] = React.useState<string | null>(null)
@@ -100,6 +104,7 @@ export function SemesterModal() {
       })
       await loadSemesters()
       form.reset()
+      onUpdate()
     } catch (error) {
       toast({
         variant: "destructive",
@@ -125,6 +130,7 @@ export function SemesterModal() {
         description: `Successfully updated semester`,
       })
       await loadSemesters()
+      onUpdate()
     } catch (error) {
       toast({
         variant: "destructive",
@@ -150,6 +156,7 @@ export function SemesterModal() {
         title: "Semester deleted",
         description: "Successfully deleted the semester",
       })
+      onUpdate()
     } catch (error) {
       toast({
         variant: "destructive",
@@ -167,6 +174,11 @@ export function SemesterModal() {
       editFormRef.current.focus()
     }
   }, [editingId])
+
+  const handleCloseModal = () => {
+    setOpen(false)
+    onUpdate()
+  }
 
   return (
     <>
@@ -264,6 +276,9 @@ export function SemesterModal() {
               </TableBody>
             </Table>
           </div>
+          <div className="mt-6 flex justify-end">
+            <Button onClick={handleCloseModal}>Done</Button>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -290,4 +305,3 @@ export function SemesterModal() {
     </>
   )
 }
-

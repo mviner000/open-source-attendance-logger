@@ -1,3 +1,5 @@
+// src/SchoolAccounts.tsx
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { SchoolAccountsApi, SchoolAccount } from '@/lib/school_accounts';
 import { SemesterApi, Semester } from '@/lib/semester';
@@ -7,7 +9,8 @@ import { SemesterModal } from './semester-modal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Search } from 'lucide-react';
+import { SearchModal } from './search-modal';
 
 const SchoolAccountsPage: React.FC = () => {
   const [schoolAccounts, setSchoolAccounts] = useState<SchoolAccount[]>([]);
@@ -15,6 +18,8 @@ const SchoolAccountsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeCount, setActiveCount] = useState<number>(0);
   const [inactiveCount, setInactiveCount] = useState<number>(0);
+
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   
   // Filters
   const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -89,6 +94,10 @@ const SchoolAccountsPage: React.FC = () => {
     fetchSchoolAccountsAndSemesters();
   };
 
+  const handleSemesterUpdate = () => {
+    fetchSchoolAccountsAndSemesters();
+  };
+
   // Filter accounts based on the selected filters
   const filteredAccounts = schoolAccounts.filter(account => {
     const isActiveFilter = 
@@ -111,161 +120,186 @@ const SchoolAccountsPage: React.FC = () => {
     return isActiveFilter && isCourseFilter && isYearLevelFilter && isSemesterFilter;
   });
 
-  // Render loading state
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <Button disabled>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Loading accounts...
-        </Button>
-      </div>
-    );
-  }
-
-  // Render error state
-  if (error) {
-    return (
-      <div className="p-4 text-red-500">
-        <p>{error}</p>
-        <Button onClick={fetchSchoolAccountsAndSemesters} className="mt-4">
-          Retry Fetching
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <div className='pb-10'>
-      <CsvImportComponent onImportSuccess={handleImportSuccess} />
-      <div className="mt-8 w-full max-w-6xl mx-auto">
-        <SemesterModal />
-      </div>
-      <Card className="mt-8 w-full max-w-6xl mx-auto">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>School Accounts</CardTitle>
-          <div className="flex items-center space-x-4">
-            {/* Status Filter Dropdown */}
-            <Select 
-              value={filter} 
-              onValueChange={(value) => setFilter(value as 'all' | 'active' | 'inactive')}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Accounts</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Course Filter Dropdown */}
-            <Select 
-              value={courseFilter} 
-              onValueChange={(value) => setCourseFilter(value)}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by Course" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Courses</SelectItem>
-                {courses.map((course) => (
-                  <SelectItem key={course} value={course}>
-                    {course}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Year Level Filter Dropdown */}
-            <Select 
-              value={yearLevelFilter} 
-              onValueChange={(value) => setYearLevelFilter(value)}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by Year Level" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Year Levels</SelectItem>
-                {yearLevels.map((yearLevel) => (
-                  <SelectItem key={yearLevel} value={yearLevel}>
-                    {yearLevel}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Semester Filter Dropdown */}
-            <Select 
-              value={semesterFilter} 
-              onValueChange={(value) => setSemesterFilter(value)}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by Semester" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Semesters</SelectItem>
-                {semesters.map((semester) => (
-                  <SelectItem key={semester.id} value={semester.id}>
-                    {semester.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Status Counts */}
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <span className="w-3 h-3 rounded-full bg-green-500" />
-                <span>Active: {activeCount}</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className="w-3 h-3 rounded-full bg-red-500" />
-                <span>Inactive: {inactiveCount}</span>
-              </div>
-            </div>
+    <div className="flex justify-center items-center min-h-screen w-full bg-background">
+      <div className="w-full max-w-6xl p-4 space-y-6">
+        {loading ? (
+          <div className="flex justify-center items-center">
+            <Button disabled>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading accounts...
+            </Button>
           </div>
-        </CardHeader>
-        <CardContent>
-          {filteredAccounts.length === 0 ? (
-            <p className="text-center text-gray-500">
-              No school accounts found matching the current filters
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="p-2 border text-left">School ID</th>
-                    <th className="p-2 border text-left">Name</th>
-                    <th className="p-2 border text-left">Course</th>
-                    <th className="p-2 border text-left">Year Level</th>
-                    <th className="p-2 border text-left">Last Updated On</th>
-                    <th className="p-2 border text-left">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAccounts.map((account) => (
-                    <tr key={account.id} className="hover:bg-gray-50">
-                      <td className="p-2 border">{account.school_id}</td>
-                      <td className="p-2 border">
-                        {`${account.first_name || ''} ${account.middle_name || ''} ${account.last_name || ''}`}
-                      </td>
-                      <td className="p-2 border">{account.course}</td>
-                      <td className="p-2 border">{account.year_level}</td>
-                      <td className="p-2 border">{account.last_updated_semester?.label || 'N/A'}</td>
-                      <td className="p-2 border">{account.is_active ? 'Active' : 'Inactive'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        ) : error ? (
+          <div className="p-4 text-red-500">
+            <p>{error}</p>
+            <Button onClick={fetchSchoolAccountsAndSemesters} className="mt-4">
+              Retry Fetching
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Import Accounts</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CsvImportComponent onImportSuccess={handleImportSuccess} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Manage Semesters</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <SemesterModal onUpdate={handleSemesterUpdate} />
+                </CardContent>
+              </Card>
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Account Statistics</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-medium">Active Accounts</p>
+                    <p className="text-2xl font-bold">{activeCount}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Inactive Accounts</p>
+                    <p className="text-2xl font-bold">{inactiveCount}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Filter Accounts</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <Select value={filter} onValueChange={(value: 'all' | 'active' | 'inactive') => setFilter(value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={courseFilter} onValueChange={setCourseFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Course" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Courses</SelectItem>
+                      {courses.map((course) => (
+                        <SelectItem key={course} value={course}>
+                          {course}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={yearLevelFilter} onValueChange={setYearLevelFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Year Level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Year Levels</SelectItem>
+                      {yearLevels.map((yearLevel) => (
+                        <SelectItem key={yearLevel} value={yearLevel}>
+                          {yearLevel}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={semesterFilter} onValueChange={setSemesterFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Semester" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Semesters</SelectItem>
+                      {semesters.map((semester) => (
+                        <SelectItem key={semester.id} value={semester.id}>
+                          {semester.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center w-full">
+                <CardTitle>School Accounts</CardTitle>
+                <Button onClick={() => setIsSearchModalOpen(true)}>
+                  <Search className="mr-2 h-4 w-4" />
+                  Search
+                </Button>
+              </div>
+            </CardHeader>
+              <CardContent>
+                {filteredAccounts.length === 0 ? (
+                  <p className="text-center text-gray-500">
+                    No school accounts found matching the current filters
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-gray-100">
+                          <th className="p-2 border text-left">School ID</th>
+                          <th className="p-2 border text-left">Name</th>
+                          <th className="p-2 border text-left">Course</th>
+                          <th className="p-2 border text-left">Year Level</th>
+                          <th className="p-2 border text-left">Last Updated On</th>
+                          <th className="p-2 border text-left">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredAccounts.map((account) => (
+                          <tr key={account.id} className="hover:bg-gray-50">
+                            <td className="p-2 border">{account.school_id}</td>
+                            <td className="p-2 border">
+                              {`${account.first_name || ''} ${account.middle_name || ''} ${account.last_name || ''}`}
+                            </td>
+                            <td className="p-2 border">{account.course}</td>
+                            <td className="p-2 border">{account.year_level}</td>
+                            <td className="p-2 border">{account.last_updated_semester?.label || 'N/A'}</td>
+                            <td className="p-2 border">
+                              <span className='flex items-center'>
+                                <span
+                                  className={`inline-block w-3 h-3 rounded-full mr-2 ${
+                                    account.is_active ? 'bg-green-500' : 'bg-red-500'
+                                  }`}
+                                ></span>
+                                {account.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <SearchModal
+              isOpen={isSearchModalOpen}
+              onClose={() => setIsSearchModalOpen(false)}
+              schoolAccounts={schoolAccounts}
+            />
+          </>
+        )}
+      </div>
     </div>
   );
 };
 
 export default SchoolAccountsPage;
+
