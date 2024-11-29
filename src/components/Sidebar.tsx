@@ -28,7 +28,7 @@ const Sidebar: React.FC = () => {
   }
 
   return (
-    <div className="fixed left-10 rounded-2xl w-64 bg-[#0D2F16] shadow-lg z-50 top-[6rem] bottom-7">
+    <div className="fixed left-10 rounded-l-2xl w-64 bg-[#0D2F16] shadow-lg top-[6rem] bottom-7">
       <nav className="h-full">
         <div className="h-full bg-[#795d18] mx-5 pt-10">
           <div className="flex flex-col gap-5">
