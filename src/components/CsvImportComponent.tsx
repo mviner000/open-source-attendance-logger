@@ -1,3 +1,5 @@
+// CsvImportComponent.tsx
+
 import React, { useState, useEffect } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { CsvImportApi, CsvValidationResult, CsvImportResponse } from '../lib/csv_import';
@@ -25,6 +27,7 @@ import { FileSpreadsheet, AlertCircle, AlertTriangle, CheckCircle, FileUp, Clipb
 import { CsvHeaderValidationErrors } from './CsvHeaderValidationErrors';
 import CsvContentValidationErrors from './CsvContentValidationErrors';
 import { SchoolAccount } from '@/lib/school_accounts';
+import ImportLoadingState from './ImportLoadingState';
 
 interface CsvImportComponentProps {
   onImportSuccess: () => void;
@@ -60,6 +63,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
   const [showExistingAccountInfo, setShowExistingAccountInfo] = useState(true);
   const [showImportSection, setShowImportSection] = useState(true);
   const [isFileImported, setIsFileImported] = useState(false);
+  const [isShowingImportLoadingState, setIsShowingImportLoadingState] = useState(false);
 
   useEffect(() => {
     const fetchSemesters = async () => {
@@ -149,11 +153,19 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
     setShowUpdateConfirmation(false);
 
     try {
+      // If it's a forced update, show the loading state
+      if (forceUpdate) {
+        setIsShowingImportLoadingState(true);
+      }
+
       const result = await CsvImportApi.importCsvFile({
         file_path: fullFilePath,
         semester_id: selectedSemester.id,
         force_update: forceUpdate
       });
+      
+      // Hide loading state after import is complete
+      setIsShowingImportLoadingState(false);
       
       setImportResult(result);
       setShowStatistics(true);
@@ -162,6 +174,8 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
 
       return result;
     } catch (err) {
+      // Hide loading state in case of error
+      setIsShowingImportLoadingState(false);
       setError(err instanceof Error ? err.message : 'Import failed');
     } finally {
       setIsImporting(false);
@@ -186,6 +200,10 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
 
   return (
     <Card className="w-full max-w-4xl">
+      {isShowingImportLoadingState ? (
+        <ImportLoadingState />
+      ) : (
+        <>
       <CardHeader>
         <div className="flex justify-between items-center w-full">
           <div className="flex items-center">
@@ -205,7 +223,9 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
           )}
         </div>
       </CardHeader>
-      {currentStep > 0 && (
+      </>
+    )}
+      {currentStep > 0 && !isShowingImportLoadingState && (
         <div className="px-6 py-2">
           <Progress value={(currentStep / steps.length) * 100} className="w-full" />
           <div className="flex justify-between mt-2">
