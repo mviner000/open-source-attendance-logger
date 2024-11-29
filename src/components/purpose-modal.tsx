@@ -45,7 +45,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 
-import { Purpose, PurposeApi, CreatePurposeRequest } from "@/lib/purpose"
+import { Purpose, PurposeApi } from "@/lib/purpose"
 import { IconSelector } from "@/components/icon-selector"
 
 const formSchema = z.object({

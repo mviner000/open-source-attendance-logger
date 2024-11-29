@@ -2,7 +2,6 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from './logger';
-import { v4 as uuidv4 } from 'uuid';
 
 // Types from Rust implementation
 export interface Attendance {

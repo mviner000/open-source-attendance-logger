@@ -1,14 +1,13 @@
 // Attendance.tsx
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { AttendanceApi, AttendanceWithDates, CreateAttendanceRequest, UpdateAttendanceRequest } from '../lib/attendance'
+import { AttendanceApi, AttendanceWithDates, UpdateAttendanceRequest } from '../lib/attendance'
 import { logger, LogLevel } from '../lib/logger'
 import { ToastProvider, ToastViewport } from "@/components/ui/toast"
 import { useToast } from '@/hooks/use-toast'
 import AuthModal from './AuthModal'
 import AttendanceCard from './attendance/AttendanceCard'
 import SearchBar from './SearchBar'
-import CreateAttendanceForm from './attendance/CreateAttendanceForm'
 
 const Records: React.FC = () => {
   // States

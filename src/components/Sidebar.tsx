@@ -5,7 +5,8 @@ import { SchoolAccountsApi } from '../lib/school_accounts'
 const Sidebar: React.FC = () => {
   const location = useLocation()
 
-  const handleSchoolAccountsClick = async (e: React.MouseEvent) => {
+  const handleSchoolAccountsClick = async (_e: React.MouseEvent) => {
+    
     try {
       const accounts = await SchoolAccountsApi.getAllSchoolAccounts()
       console.log('Accounts fetched successfully:', accounts)

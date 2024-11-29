@@ -156,7 +156,7 @@ const SchoolAccountsPage: React.FC = () => {
                 <SemesterModal onUpdate={handleSemesterUpdate} />
               </CardContent>
             </Card>
-            <Card>
+            <Card className='hidden'>
               <CardHeader>
                 <CardTitle>Manage Purposes</CardTitle>
               </CardHeader>
@@ -166,9 +166,14 @@ const SchoolAccountsPage: React.FC = () => {
             </Card>
             </div>
             <Card>
-              <CardHeader>
+            <CardHeader>
+              <div className="flex justify-between items-center w-full">
                 <CardTitle>Account Statistics</CardTitle>
-              </CardHeader>
+                <div className="text-right flex items-center">
+                  <p className="text-sm font-medium">Total: <span className='font-bold'>{activeCount + inactiveCount}</span></p>
+                </div>
+              </div>
+            </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
