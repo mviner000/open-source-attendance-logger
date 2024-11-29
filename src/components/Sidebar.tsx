@@ -15,9 +15,9 @@ const Sidebar: React.FC = () => {
   }
 
   const sidebarLinks = [
-    { path: '/', label: 'Home' },
-    { path: '/school-accounts', label: 'School Accounts', onClick: handleSchoolAccountsClick },
-    { path: '/attendance', label: 'Attendance' }
+    { path: '/', label: 'School Accounts', onClick: handleSchoolAccountsClick },
+    { path: '/attendance', label: 'Attendance' },
+    { path: '/records', label: 'Records' }
   ]
 
   const isActive = (path: string) => {

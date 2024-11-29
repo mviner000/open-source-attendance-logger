@@ -13,6 +13,8 @@ mod purpose_commands;
 mod attendance_commands;
 
 use tauri::Manager;
+use tauri::Emitter;
+use serde::Serialize;
 use db::{Database, init_db, DatabaseInfo};
 use db::auth::Credentials;
 use rusqlite::Result;
@@ -20,6 +22,7 @@ use network::{start_network_monitoring, check_network};
 use first_launch::handle_first_launch;
 use log::error;
 use storage::AppStorage;
+use std::time::Duration;
 
 pub use crate::config::{Config, DatabaseConfig}; 
 
@@ -61,6 +64,21 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            let splashscreen_window = app.get_webview_window("splashscreen").unwrap();
+            let main_window = app.get_webview_window("main").unwrap();
+
+            // Simulate some setup tasks
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                // Simulate database initialization and other startup tasks
+                tokio::time::sleep(Duration::from_secs(3)).await;
+
+                // Close splashscreen and show main window
+                app_handle.emit("close-splashscreen", ()).unwrap();
+                app_handle.get_webview_window("splashscreen").unwrap().close().unwrap();
+                app_handle.get_webview_window("main").unwrap().show().unwrap();
+            });
+
             if let Some(storage) = AppStorage::new() {
                 if let Err(e) = storage.initialize() {
                     error!("Failed to initialize storage directories: {}", e);

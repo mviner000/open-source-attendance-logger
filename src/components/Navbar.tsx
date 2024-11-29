@@ -19,7 +19,7 @@ const Navbar: React.FC = () => {
       console.log('Number of accounts:', accounts.length);
       
       // Proceed with navigation
-      navigate('/school-accounts');
+      navigate('/');
     } catch (error) {
       console.error('Error fetching school accounts:', error);
     }
@@ -31,13 +31,13 @@ const Navbar: React.FC = () => {
         <div className="flex justify-between h-16">
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
-              <Link to="/" className="text-xl font-bold text-gray-100 hover:text-gray-300 transition-colors">
+              <Link to="#" className="text-xl font-bold text-gray-100 hover:text-gray-300 transition-colors">
                 Team Esternon
               </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               <Link 
-                to="/school-accounts" 
+                to="/" 
                 onClick={handleSchoolAccountsClick}
                 className="border-transparent text-gray-300 hover:border-gray-100 hover:text-gray-100 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-bold"
               >

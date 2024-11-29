@@ -3,8 +3,8 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import Attendance from './components/Attendance';
 import SchoolAccounts from "./components/SchoolAccounts";
 import Navbar from "./components/Navbar";
-import HomePage from "./components/HomePage";
 import Sidebar from "./components/Sidebar";
+import Records from "./components/Records";
 
 function App() {
   return (
@@ -17,8 +17,8 @@ function App() {
           </div>
           <div className="flex-1 overflow-auto">
             <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/school-accounts" element={<SchoolAccounts />} />
+              <Route path="/" element={<SchoolAccounts />} />
+              <Route path="records" element={<Records />} />
               <Route path="/attendance" element={<Attendance />} />
             </Routes>
           </div>

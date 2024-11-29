@@ -11,7 +11,7 @@ interface SearchBarProps {
 
 const SearchBar: React.FC<SearchBarProps> = ({ searchQuery, setSearchQuery, handleClearSearch }) => {
   return (
-    <div className="mb-4 relative">
+    <div className="mb-4 relative p-4 bg-[#2F4A34] rounded-lg">
         <Input
           className="text-white"
           placeholderClassName="placeholder:text-white"
