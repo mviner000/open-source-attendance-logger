@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { FileSpreadsheet, AlertCircle, AlertTriangle, CheckCircle, FileUp, ClipboardCheck, Upload, Check } from 'lucide-react';
+import { FileSpreadsheet, AlertCircle, AlertTriangle, CheckCircle, FileUp, ClipboardCheck, Upload, Check, TriangleAlertIcon, SquareLibrary, MoveRight } from 'lucide-react';
 import { CsvHeaderValidationErrors } from './CsvHeaderValidationErrors';
 import CsvContentValidationErrors from './CsvContentValidationErrors';
 import { SchoolAccount } from '@/lib/school_accounts';
@@ -77,6 +77,11 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
 
   const handleFileSelect = async () => {
     try {
+      // Disable the button if any of these conditions are true
+      if (isFileImported || existingAccountInfo || showStatistics) {
+        return;
+      }
+
       const selected = await open({
         filters: [{ name: 'CSV', extensions: ['csv'] }],
         multiple: false,
@@ -216,10 +221,11 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
       <CardContent>
         <div className="space-y-4">
           <div className="flex space-x-4">
-            <Button 
+            <Button
               onClick={handleFileSelect} 
               variant="outline" 
               className="flex-grow border-green-500 hover:bg-green-50"
+              disabled={isFileImported || !!existingAccountInfo || showStatistics}
             >
               <FileUp className="w-4 h-4 mr-2" />
               {displayFileName ? `Selected: ${displayFileName}` : 'Select CSV File'}
@@ -227,37 +233,67 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
           </div>
 
           {fullFilePath && !isFileImported && !existingAccountInfo && (
-            <div className="flex space-x-4">
+            <div className="flex justify-end items-center">
               <Button 
                 onClick={validateFile} 
                 disabled={!fullFilePath || isValidating}
-                variant="secondary"
-                className="flex-grow"
+                className={`flex items-center justify-center gap-2 pl-4 border border-yellow-700 pr-5 py-3 text-white font-semibold transition duration-200 ease-in-out ${
+                  isValidating || !fullFilePath ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600 active:scale-95'
+                }`}
               >
-                <ClipboardCheck className="w-4 h-4 mr-2" />
-                {isValidating ? 'Validating...' : 'Validate File'}
+                <MoveRight className="w-5 h-5" />
+                <span className='mt-1 text-base'>
+                  {isValidating ? 'Validating...' : 'Validate File'}
+                </span>
               </Button>
             </div>
           )}
 
           {existingAccountInfo && showExistingAccountInfo && (
-            <Alert variant="default" className="border-green-500">
-              <AlertTriangle className="h-4 w-4 text-green-500" />
-              <AlertTitle className="text-green-700">Account Overview</AlertTitle>
-              <AlertDescription className="space-y-2">
-                <p>New accounts to be created: {existingAccountInfo.new_accounts_count}</p>
-                <p>Existing accounts that will be updated: {existingAccountInfo.existing_accounts_count}</p>
+            <Alert variant="default" className="border-green-500 pb-4">
+              <div className="flex items-center space-x-2 mb-1">
+                <SquareLibrary className="h-6 w-6 text-green-600" />
+                <AlertTitle className="text-2xl font-black text-green-600 mt-3">Validated CSV File</AlertTitle>
+              </div>
+              <AlertDescription className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-green-50 rounded-lg p-4 border border-green-100">
+                    <div className="text-base text-green-600 font-bold mb-1">New Accounts</div>
+                    <div className='py-3 mt-2'>
+                      <span className="text-4xl font-bold text-white py-4 px-2 pb-1.5 bg-green-500 rounded-md">
+                        {existingAccountInfo.new_accounts_count}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-500 italic">To be created</div>
+                  </div>
+                  
+                  <div className="bg-green-50 rounded-lg p-4 border border-green-100">
+                    <div className="text-base text-green-700 font-bold mb-1 underline underline-offset-1">Existing Accounts!</div>
+                    <div className='py-3 mt-2'>
+                      <span className="text-4xl font-bold text-white py-4 px-2 pb-1.5 bg-green-500 rounded-md">
+                        {existingAccountInfo.existing_accounts_count}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-500 italic">To be updated</div>
+                  </div>
+                </div>
+
                 {existingAccountInfo.existing_accounts.length > 0 && (
-                  <div className="mt-2">
-                    <p className="font-semibold">Accounts to be updated:</p>
-                    <ul className="list-disc list-inside mt-1">
+                  <div className="mt-4 bg-green-50 rounded-lg p-4 border border-green-200">
+                    <p className="text-sm font-semibold text-green-700 mb-2">Accounts to be updated:</p>
+                    <ul className="space-y-1">
                       {existingAccountInfo.existing_accounts.slice(0, 5).map((account, index) => (
-                        <li key={index}>
-                          {account.school_id} - {account.first_name} {account.last_name}
+                        <li key={index} className="text-sm text-gray-600 flex items-center">
+                          <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
+                          <span className="font-medium">{account.school_id}</span>
+                          <span className="mx-2">-</span>
+                          <span>{account.first_name} {account.last_name}</span>
                         </li>
                       ))}
                       {existingAccountInfo.existing_accounts.length > 5 && (
-                        <li>... and {existingAccountInfo.existing_accounts.length - 5} more</li>
+                        <li className="text-xs text-gray-500 italic mt-2 pl-4">
+                          ... and {existingAccountInfo.existing_accounts.length - 5} more accounts
+                        </li>
                       )}
                     </ul>
                   </div>
@@ -318,7 +354,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             <Alert variant="default" className="bg-green-50 border-green-300 p-4">
               <div className="flex items-center space-x-4 mb-4">
                 <CheckCircle className="h-10 w-10 text-green-600" />
-                <AlertTitle className="text-2xl font-bold text-green-800">Import Successful</AlertTitle>
+                <AlertTitle className="text-2xl font-bold text-green-800 mt-2">Import Successful</AlertTitle>
               </div>
               <AlertDescription>
                 <div className="space-y-4">
