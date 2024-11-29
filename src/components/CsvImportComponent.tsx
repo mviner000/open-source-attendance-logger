@@ -59,6 +59,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
   const [currentStep, setCurrentStep] = useState(0);
   const [showExistingAccountInfo, setShowExistingAccountInfo] = useState(true);
   const [showImportSection, setShowImportSection] = useState(true);
+  const [isFileImported, setIsFileImported] = useState(false);
 
   useEffect(() => {
     const fetchSemesters = async () => {
@@ -105,6 +106,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
     setCurrentStep(0);
     setShowExistingAccountInfo(true);
     setShowImportSection(true);
+    setIsFileImported(false);
   };
 
   const validateFile = async () => {
@@ -151,6 +153,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
       setImportResult(result);
       setShowStatistics(true);
       setCurrentStep(3);
+      setIsFileImported(true);
 
       return result;
     } catch (err) {
@@ -174,6 +177,8 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
     onImportSuccess();
   };
 
+  const shouldShowCancelButton = (fullFilePath || isFileImported || existingAccountInfo) && !showStatistics;
+
   return (
     <Card className="w-full max-w-4xl">
       <CardHeader>
@@ -182,15 +187,17 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             <FileSpreadsheet className="mr-2" />
             <CardTitle>CSV Import</CardTitle>
           </div>
-          <Button 
-            variant="outline" 
-            className="border-red-500 text-red-500 hover:bg-red-50"
-            onClick={() => {
-              resetState();
-            }}
-          >
-            Cancel
-          </Button>
+          {shouldShowCancelButton && (
+            <Button 
+              variant="outline" 
+              className="border-red-500 text-red-500 hover:bg-red-50"
+              onClick={() => {
+                resetState();
+              }}
+            >
+              Cancel
+            </Button>
+          )}
         </div>
       </CardHeader>
       {currentStep > 0 && (
@@ -219,7 +226,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </Button>
           </div>
 
-          {fullFilePath && (
+          {fullFilePath && !isFileImported && !existingAccountInfo && (
             <div className="flex space-x-4">
               <Button 
                 onClick={validateFile} 
@@ -307,64 +314,89 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </>
           )}
 
-          {importResult && importResult.failed_imports === 0 && (
-            <Alert variant="default" className="border-green-500">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <AlertTitle className="text-green-700">Import Successful</AlertTitle>
-              <AlertDescription>
-                <div className="space-y-2">
-                  <p>Total Processed: {importResult.total_processed}</p>
-                  <p>Successfully Imported: {importResult.successful_imports}</p>
-                  
-                  {importResult.existing_account_info && (
-                    <>
-                      <p>New Accounts Created: {importResult.existing_account_info.new_accounts_count}</p>
-                      <p>Existing Accounts Updated: {importResult.existing_account_info.existing_accounts_count}</p>
-                    </>
-                  )}
-                  
-                </div>
-              </AlertDescription>
-            </Alert>
-          )}
-
           {showStatistics && importResult && importResult.account_status_counts && (
-            <Alert variant="default" className="border-green-500">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <AlertTitle className="text-green-700">Import Successful - Account Statistics</AlertTitle>
+            <Alert variant="default" className="bg-green-50 border-green-300 p-4">
+              <div className="flex items-center space-x-4 mb-4">
+                <CheckCircle className="h-10 w-10 text-green-600" />
+                <AlertTitle className="text-2xl font-bold text-green-800">Import Successful</AlertTitle>
+              </div>
               <AlertDescription>
-                <div className="space-y-2">
-                  <p>Total Accounts in Database: {importResult.account_status_counts.total_accounts}</p>
-                  <p>Activated Accounts: {importResult.account_status_counts.activated_accounts}</p>
-                  <p>Deactivated Accounts: {importResult.account_status_counts.deactivated_accounts}</p>
+                <div className="space-y-4">
+                  {importResult.existing_account_info && (
+                    <div className="grid grid-cols-3 gap-3 text-sm">
+                      <div className="bg-blue-100 p-3 rounded-lg">
+                        <p className="text-xs text-gray-600 uppercase tracking-wider mb-1">New Accounts</p>
+                        <p className="text-lg font-bold text-blue-800">{importResult.existing_account_info.new_accounts_count}</p>
+                      </div>
+                      <div className="bg-yellow-100 p-3 rounded-lg">
+                        <p className="text-xs text-gray-600 uppercase tracking-wider mb-1">Updated Accounts</p>
+                        <p className="text-lg font-bold text-yellow-800">{importResult.existing_account_info.existing_accounts_count}</p>
+                      </div>
+                      <div className="bg-purple-100 p-3 rounded-lg">
+                        <p className="text-xs text-gray-600 uppercase tracking-wider mb-1">Total in Database</p>
+                        <p className="text-lg font-bold text-purple-800">{importResult.account_status_counts.total_accounts}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="bg-green-200 p-3 rounded-lg">
+                      <p className="text-xs text-gray-600 uppercase tracking-wider mb-1">Activated Accounts</p>
+                      <p className="text-lg font-bold text-green-900">{importResult.account_status_counts.activated_accounts}</p>
+                    </div>
+                    <div className="bg-red-200 p-3 rounded-lg">
+                      <p className="text-xs text-gray-600 uppercase tracking-wider mb-1">Deactivated Accounts</p>
+                      <p className="text-lg font-bold text-red-900">{importResult.account_status_counts.deactivated_accounts}</p>
+                    </div>
+                  </div>
                 </div>
               </AlertDescription>
             </Alert>
           )}
 
           {importResult && importResult.failed_imports > 0 && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Import Completed with Errors</AlertTitle>
-              <AlertDescription>
-                <div className="space-y-2">
-                  <p>Total Processed: {importResult.total_processed}</p>
-                  <p>Successfully Imported: {importResult.successful_imports}</p>
-                  <p>Failed Imports: {importResult.failed_imports}</p>
-                  
-                  <div>
-                    <p className="font-semibold mt-2">Error Details:</p>
-                    <ul className="list-disc list-inside">
-                      {importResult.error_details.slice(0, 5).map((err, index) => (
-                        <li key={index}>{err}</li>
-                      ))}
-                      {importResult.error_details.length > 5 && (
-                        <li>... and {importResult.error_details.length - 5} more errors</li>
-                      )}
-                    </ul>
-                  </div>
+            <Alert variant="destructive" className="bg-red-50 border-red-300">
+              <div className="flex items-center">
+                <AlertCircle className="h-8 w-8 text-red-600 mr-4" />
+                <div>
+                  <AlertTitle className="text-xl font-bold text-red-800 mb-2">Import Completed with Partial Errors</AlertTitle>
+                  <AlertDescription>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-3 gap-2 text-sm">
+                        <div className="bg-red-100 p-2 rounded">
+                          <p className="text-xs text-gray-600 uppercase tracking-wider">Total Processed</p>
+                          <p className="text-lg font-semibold text-red-700">{importResult.total_processed}</p>
+                        </div>
+                        <div className="bg-green-100 p-2 rounded">
+                          <p className="text-xs text-gray-600 uppercase tracking-wider">Successfully Imported</p>
+                          <p className="text-lg font-semibold text-green-700">{importResult.successful_imports}</p>
+                        </div>
+                        <div className="bg-red-200 p-2 rounded">
+                          <p className="text-xs text-gray-600 uppercase tracking-wider">Failed Imports</p>
+                          <p className="text-lg font-semibold text-red-800">{importResult.failed_imports}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-red-100 p-3 rounded-lg">
+                        <p className="font-bold text-red-800 mb-2 text-sm">Error Details:</p>
+                        <ul className="space-y-1 text-xs text-red-700">
+                          {importResult.error_details.slice(0, 5).map((err, index) => (
+                            <li key={index} className="flex items-center">
+                              <AlertCircle className="w-3 h-3 mr-2 text-red-500" />
+                              {err}
+                            </li>
+                          ))}
+                          {importResult.error_details.length > 5 && (
+                            <li className="text-gray-600 italic">
+                              ... and {importResult.error_details.length - 5} more errors
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    </div>
+                  </AlertDescription>
                 </div>
-              </AlertDescription>
+              </div>
             </Alert>
           )}
 
