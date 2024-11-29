@@ -78,7 +78,7 @@ impl AttendanceRepository for SqliteAttendanceRepository {
             Err(_) => {
                 // If no school account found, use the provided full name and default classification
                 if attendance.full_name.is_empty() {
-                    let err = rusqlite::Error::InvalidParameterName("School ID not found and no full name provided".to_string());
+                    let err = rusqlite::Error::InvalidParameterName("School ID not found".to_string());
                     error!("Failed to create attendance record: {}", err);
                     return Err(err);
                 }

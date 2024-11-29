@@ -112,8 +112,14 @@ const Attendance: React.FC = () => {
       setError(null)
       addToast('Attendance record created successfully', 'success')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create attendance')
-      addToast('Failed to create attendance record', 'error')
+      // Ensure we capture the exact error message
+      const errorMessage = err instanceof Error 
+        ? err.message  // This will capture the full error message from the backend
+        : String(err)  // Fallback to string conversion if not an Error object
+  
+      // Set the specific error message
+      setError(errorMessage)
+      addToast(errorMessage, 'error')
     }
   }
 

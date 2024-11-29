@@ -121,8 +121,8 @@ const SchoolAccountsPage: React.FC = () => {
   });
 
   return (
-    <div className="flex justify-center items-center min-h-screen w-full bg-background">
-      <div className="w-full max-w-6xl p-4 space-y-6">
+    <div className="flex-1 p-4 overflow-auto"> {/* Changed this line */}
+      <div className="w-full max-w-6xl mx-auto space-y-6">
         {loading ? (
           <div className="flex justify-center items-center">
             <Button disabled>

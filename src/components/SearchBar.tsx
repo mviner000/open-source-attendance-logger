@@ -12,12 +12,14 @@ interface SearchBarProps {
 const SearchBar: React.FC<SearchBarProps> = ({ searchQuery, setSearchQuery, handleClearSearch }) => {
   return (
     <div className="mb-4 relative">
-      <Input
-        type="text"
-        placeholder="Search..."
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-      />
+        <Input
+          className="text-white"
+          placeholderClassName="placeholder:text-white"
+          type="text"
+          placeholder="Search..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
       {searchQuery && (
         <Button
           variant="ghost"

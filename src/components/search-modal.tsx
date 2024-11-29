@@ -50,6 +50,8 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, schoo
         <div className="grid gap-4 py-4">
           <div className="flex items-center gap-4">
             <Input
+      className="text-white"
+      placeholderClassName="placeholder:text-white"
               id="search"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}

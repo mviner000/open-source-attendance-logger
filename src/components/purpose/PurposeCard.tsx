@@ -1,7 +1,18 @@
-import React from 'react';
 import * as Icons from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LucideIcon } from 'lucide-react';
+
+// Utility function to normalize icon names
+const normalizeIconName = (iconName: string): string => {
+  // Remove any prefix like "exampleonly->"
+  const cleanName = iconName.split('->').pop() || iconName;
+  
+  // Convert to PascalCase
+  return cleanName
+    .split(/[-\s]+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join('');
+};
 
 interface PurposeCardProps {
   label: string;
@@ -11,13 +22,14 @@ interface PurposeCardProps {
 }
 
 const PurposeCard = ({ label, iconName, className, onClick }: PurposeCardProps) => {
-  // Dynamically get icon from lucide-react with proper typing
-  const Icon: LucideIcon = (Icons[iconName as keyof typeof Icons] as LucideIcon) || Icons.HelpCircle;
+  // Normalize the icon name and dynamically get icon from lucide-react
+  const normalizedIconName = normalizeIconName(iconName);
+  const Icon: LucideIcon = (Icons[normalizedIconName as keyof typeof Icons] as LucideIcon) || Icons.HelpCircle;
 
   const handleClick = () => {
     if (onClick) {
-      console.log('Purpose card clicked:', { label, iconName });
-      onClick({ label, iconName });
+      console.log('Purpose card clicked:', { label, iconName: normalizedIconName });
+      onClick({ label, iconName: normalizedIconName });
     }
   };
 
