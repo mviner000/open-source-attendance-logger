@@ -61,6 +61,9 @@ impl Clone for Database {
 }
 
 impl Database {
+    pub fn get_db_path(&self) -> &std::path::PathBuf {
+        &self.db_path
+    }
     pub fn new(_app_handle: &AppHandle) -> Result<Self> {
         info!("Initializing database...");
         let storage = AppStorage::new()
