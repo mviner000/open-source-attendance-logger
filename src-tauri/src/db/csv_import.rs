@@ -52,7 +52,7 @@ pub struct ValidationError {
     pub error_message: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum ValidationErrorType {
     FileSize,
     FileType,
@@ -61,6 +61,7 @@ pub enum ValidationErrorType {
     DataIntegrity,
     TypeMismatch,
 }
+
 
 pub struct CsvValidator {
     max_file_size: usize,  // bytes
@@ -359,24 +360,64 @@ impl CsvValidator {
     fn validate_record(&self, record: &StringRecord, headers: &StringRecord) -> Result<(), Vec<ValidationError>> {
         let mut record_errors = Vec::new();
     
-        // Validate Required Fields
+        // Function to get index of a header (case-insensitive)
+        let get_header_index = |header: &str| -> Option<usize> {
+            headers.iter().position(|h| h.to_lowercase() == header.to_lowercase())
+        };
+
+        // Function to get value from record safely
+        let get_value = |idx: Option<usize>| -> String {
+            idx.and_then(|index| record.get(index).map(|s| s.trim().to_string())).unwrap_or_default()
+        };
+
+        // Get school_id and name information for error context
+        let school_id_index = get_header_index("student_id");
+        let first_name_index = get_header_index("first_name");
+        let last_name_index = get_header_index("last_name");
+
+        let school_id = get_value(school_id_index);
+        let first_name = get_value(first_name_index);
+        let last_name = get_value(last_name_index);
+
+        // Construct a descriptive user context
+        let user_context = match (first_name.is_empty(), last_name.is_empty()) {
+            (false, false) => format!("{} {}", first_name, last_name),
+            (false, true) => first_name.clone(),
+            (true, false) => last_name.clone(),
+            (true, true) => "Unknown".to_string(),
+        };
+
+        // Detailed error context
+        let error_context = if !school_id.is_empty() {
+            format!(" (School ID: {})", school_id)
+        } else {
+            String::new()
+        };
+
+        // Validate Required Fields with More Specific Error Types
         let required_validations = [
-            ("student_id", "Student ID cannot be empty"),
-            ("first_name", "First name cannot be empty"),
-            ("middle_name", "Middle name cannot be empty"),
-            ("last_name", "Last name cannot be empty"),
+            ("student_id", ValidationErrorType::DataIntegrity, "Student ID is required"),
+            ("first_name", ValidationErrorType::DataIntegrity, "First name is required"),
+            ("last_name", ValidationErrorType::DataIntegrity, "Last name is required"),
         ];
     
-        for (header, error_msg) in required_validations.iter() {
-            match headers.iter().position(|h| h.to_lowercase() == header.to_lowercase()) {
+        for (header, error_type, error_msg) in required_validations.iter() {
+            match get_header_index(header) {
                 Some(idx) => {
                     let value = record.get(idx).unwrap_or("").trim();
                     if value.is_empty() {
                         record_errors.push(ValidationError {
                             row_number: 0, 
                             field: Some(header.to_string()),
-                            error_type: ValidationErrorType::DataIntegrity,
-                            error_message: error_msg.to_string(),
+                            error_type: *error_type,
+                            error_message: format!(
+                                "{}{} - {} for {} {}",
+                                error_msg, 
+                                error_context, 
+                                header, 
+                                user_context,
+                                error_context
+                            ),
                         });
                     }
                 },
@@ -384,8 +425,9 @@ impl CsvValidator {
             }
         }
     
-        // Optional Field Validations
+        // Optional Field Validations (including middle_name)
         let optional_field_validations: Vec<(&str, Box<dyn Fn(&str) -> bool>)> = vec![
+            ("middle_name", Box::new(|_: &str| -> bool { true })), // Always valid
             ("gender", Box::new(|value: &str| -> bool {
                 if value.is_empty() { return true; }
                 matches!(value.to_lowercase().as_str(), "male" | "female" | "other" | "0" | "1" | "2")
@@ -406,7 +448,7 @@ impl CsvValidator {
         ];
     
         for (header, validation_fn) in optional_field_validations.iter() {
-            match headers.iter().position(|h| h.to_lowercase() == header.to_lowercase()) {
+            match get_header_index(header) {
                 Some(idx) => {
                     let value = record.get(idx).unwrap_or("").trim();
                     if !value.is_empty() && !validation_fn(value) {
@@ -414,7 +456,13 @@ impl CsvValidator {
                             row_number: 0, 
                             field: Some(header.to_string()),
                             error_type: ValidationErrorType::TypeMismatch,
-                            error_message: format!("Invalid value for {}", header),
+                            error_message: format!(
+                                "Invalid value for {} - {} {}{}",
+                                header, 
+                                user_context, 
+                                school_id,
+                                if !school_id.is_empty() { format!(" (School ID: {})", school_id) } else { String::new() }
+                            ),
                         });
                     }
                 },

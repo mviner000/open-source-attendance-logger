@@ -269,7 +269,9 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </div>
           )}
 
-          {existingAccountInfo && showExistingAccountInfo && (
+          {existingAccountInfo && showExistingAccountInfo && 
+          validationResult && 
+          !validationResult.validation_errors.some(err => err.row_number === 0) && (
             <Alert variant="default" className="border-green-500 pb-4">
               <div className="flex items-center space-x-2 mb-1">
                 <SquareLibrary className="h-6 w-6 text-green-600" />
