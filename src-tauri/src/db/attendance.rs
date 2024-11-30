@@ -52,15 +52,6 @@ impl AttendanceRepository for SqliteAttendanceRepository {
             return Err(err);
         }
         
-        // Validate purpose label if provided
-        if let Some(purpose_label) = &attendance.purpose_label {
-            conn.query_row(
-                "SELECT id FROM purposes WHERE label = ?1 AND is_deleted = FALSE", 
-                params![purpose_label], 
-                |_| Ok(())
-            )?;
-        }
-        
         let (full_name, classification) = match conn.query_row(
             "SELECT 
                 COALESCE(
@@ -337,19 +328,6 @@ impl AttendanceRepository for SqliteAttendanceRepository {
             param_count += 1;
         }
     
-        // Validate purpose label if provided
-        if let Some(purpose_label) = &attendance.purpose_label {
-            conn.query_row(
-                "SELECT id FROM purposes WHERE label = ?1 AND is_deleted = FALSE", 
-                params![purpose_label], 
-                |_| Ok(())
-            )?;
-
-            update_parts.push(format!("purpose_label = ?{}", param_count));
-            params_values.push(purpose_label.clone());
-            param_count += 1;
-        }
-    
         if update_parts.is_empty() {
             // If no updates are provided, return the existing record
             return self.get_attendance(conn, id);
@@ -423,10 +401,7 @@ pub fn create_attendance_table(conn: &Connection) -> Result<()> {
             full_name TEXT NOT NULL,
             time_in_date TEXT NOT NULL,
             classification TEXT NOT NULL,
-            purpose_label TEXT,
-            CONSTRAINT fk_purpose
-                FOREIGN KEY (purpose_label)
-                REFERENCES purposes(label)
+            purpose_label TEXT
         )",
         [],
     )?;
