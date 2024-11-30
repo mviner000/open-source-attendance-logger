@@ -14,6 +14,16 @@ pub struct ExistingAccountInfo {
     pub school_id: String,
     pub first_name: Option<String>,
     pub last_name: Option<String>,
+    pub middle_name: Option<String>,
+    pub gender: Option<String>,
+    pub course: Option<String>,
+    pub department: Option<String>,
+    pub position: Option<String>,
+    pub major: Option<String>,
+    pub year_level: Option<String>,
+    pub is_active: Option<bool>,
+    pub last_updated_semester_id: Option<String>,
+    pub last_updated_semester: Option<String>,
     pub row_number: usize,
 }
 
@@ -99,7 +109,7 @@ impl CsvValidator {
         // Find the index of the school_id column
         let school_id_index = match headers.iter().position(|h| h.to_lowercase() == "student_id") {
             Some(idx) => idx,
-            None => return Vec::new(), // If no student_id column, return empty
+            None => return Vec::new(),
         };
     
         // Collect all school IDs from the CSV
@@ -113,57 +123,93 @@ impl CsvValidator {
             return Vec::new();
         }
     
-        // Prepare SQL query to find existing accounts
+        // Prepare SQL query with all fields
         let placeholders = csv_school_ids.iter().map(|_| "?").collect::<Vec<&str>>().join(",");
         let query = format!(
-            "SELECT id, school_id, first_name, last_name FROM school_accounts WHERE school_id IN ({})", 
+            "SELECT id, school_id, first_name, middle_name, last_name, gender, 
+                    course, department, position, major, year_level, is_active,
+                    last_updated_semester_id, last_updated_semester 
+             FROM school_accounts 
+             WHERE school_id IN ({})", 
             placeholders
         );
     
-        // Execute query
         let mut existing_accounts = Vec::new();
-        
-        // Use match to handle potential query preparation errors
-        let stmt_result = self.connection.prepare(&query);
-        let mut stmt = match stmt_result {
+        let mut stmt = match self.connection.prepare(&query) {
             Ok(stmt) => stmt,
-            Err(_) => return Vec::new(), // Return empty if statement preparation fails
+            Err(e) => {
+                log::error!("Failed to prepare query for existing accounts: {}", e);
+                return Vec::new();
+            }
         };
     
         let params: Vec<&dyn rusqlite::ToSql> = csv_school_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
     
-        // Use match to handle potential query errors
-        let rows_result = stmt.query(params.as_slice());
-        let mut rows = match rows_result {
+        let mut rows = match stmt.query(params.as_slice()) {
             Ok(rows) => rows,
-            Err(_) => return Vec::new(), // Return empty if query fails
+            Err(e) => {
+                log::error!("Failed to execute query for existing accounts: {}", e);
+                return Vec::new();
+            }
         };
     
-        // Iterate through rows
         while let Ok(Some(row)) = rows.next() {
-            let existing_id: String = row.get(0).unwrap_or_default();
             let school_id: String = row.get(1).unwrap_or_default();
-            let first_name: Option<String> = row.get(2).ok();
-            let last_name: Option<String> = row.get(3).ok();
-    
-            // Find the row number in the original CSV
-            let csv_row_number = records
-                .iter()
-                .position(|record| 
-                    record.get(school_id_index)
-                        .map(|id| id.trim() == school_id)
-                        .unwrap_or(false)
-                )
-                .map(|idx| idx + 2) // +2 to account for header row and 1-based indexing
-                .unwrap_or(0);
-    
-            existing_accounts.push(ExistingAccountInfo {
-                existing_id,
-                school_id,
-                first_name,
-                last_name,
-                row_number: csv_row_number,
-            });
+            let account_info = ExistingAccountInfo {
+                existing_id: row.get(0).unwrap_or_default(),
+                school_id: school_id.clone(),
+                first_name: row.get(2).ok(),
+                middle_name: row.get(3).ok(),
+                last_name: row.get(4).ok(),
+                gender: row.get(5).ok(),
+                course: row.get(6).ok(),
+                department: row.get(7).ok(),
+                position: row.get(8).ok(),
+                major: row.get(9).ok(),
+                year_level: row.get(10).ok(),
+                is_active: row.get(11).ok(),
+                last_updated_semester_id: row.get(12).ok(),
+                last_updated_semester: row.get(13).ok(),
+                row_number: records
+                    .iter()
+                    .position(|record| 
+                        record.get(school_id_index)
+                            .map(|id| id.trim() == school_id)
+                            .unwrap_or(false)
+                    )
+                    .map(|idx| idx + 2)
+                    .unwrap_or(0),
+            };
+
+            // Log detailed account information
+            log::debug!(
+                "Found existing account for school_id {}: \n\
+                 - Full Name: {} {} {}\n\
+                 - Gender: {}\n\
+                 - Course: {}\n\
+                 - Department: {}\n\
+                 - Position: {}\n\
+                 - Major: {}\n\
+                 - Year Level: {}\n\
+                 - Active: {}\n\
+                 - Last Updated Semester: {}\n\
+                 - Row Number: {}",
+                account_info.school_id,
+                account_info.first_name.as_deref().unwrap_or(""),
+                account_info.middle_name.as_deref().unwrap_or(""),
+                account_info.last_name.as_deref().unwrap_or(""),
+                account_info.gender.as_deref().unwrap_or(""),
+                account_info.course.as_deref().unwrap_or(""),
+                account_info.department.as_deref().unwrap_or(""),
+                account_info.position.as_deref().unwrap_or(""),
+                account_info.major.as_deref().unwrap_or(""),
+                account_info.year_level.as_deref().unwrap_or(""),
+                account_info.is_active.unwrap_or(false),
+                account_info.last_updated_semester.as_deref().unwrap_or(""),
+                account_info.row_number
+            );
+
+            existing_accounts.push(account_info);
         }
     
         existing_accounts

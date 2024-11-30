@@ -3,7 +3,7 @@
 use uuid::Uuid;
 use rusqlite::{params, Connection, Result, types::ToSql};
 use serde::{Serialize, Deserialize};
-use log::{info, error};
+use log::{info, error, debug, warn};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -48,9 +48,19 @@ pub struct SqliteAttendanceRepository;
 
 impl AttendanceRepository for SqliteAttendanceRepository {
     fn create_attendance(&self, conn: &Connection, attendance: CreateAttendanceRequest) -> Result<Attendance> {
-        info!("Creating new attendance record for school_id: {}", attendance.school_id);
+        info!("Starting attendance creation process");
+        debug!("Input attendance request: {:?}", attendance);
         
-        // First, look up the school account to validate, get full name, and determine classification
+        // Log initial validation
+        if attendance.school_id.is_empty() {
+            error!("Validation failed: School ID is empty");
+            let err = rusqlite::Error::InvalidParameterName("School ID cannot be empty".to_string());
+            return Err(err);
+        }
+        
+        debug!("Looking up school account for ID: {}", attendance.school_id);
+        
+        // Detailed logging for school account lookup
         let (full_name, classification) = match conn.query_row(
             "SELECT 
                 COALESCE(
@@ -63,44 +73,98 @@ impl AttendanceRepository for SqliteAttendanceRepository {
                     END, 
                     ?1
                 ) as computed_full_name,
-                COALESCE(course, 'Faculty') as computed_classification
+                COALESCE(
+                    CASE 
+                        WHEN position IS NOT NULL AND position != '' THEN 'Faculty'
+                        WHEN course IS NOT NULL AND course != '' THEN course
+                        ELSE 'Unknown'
+                    END, 
+                    'Unknown'
+                ) as computed_classification,
+                first_name, middle_name, last_name, 
+                course, department, position, major, year_level, is_active
             FROM school_accounts 
             WHERE school_id = ?2",
             params![attendance.full_name, attendance.school_id],
             |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?
-                ))
+                let name: String = row.get(0)?;
+                let classification: String = row.get(1)?;
+                
+                // Extract additional details for debug logging
+                let first_name: Option<String> = row.get(2)?;
+                let middle_name: Option<String> = row.get(3)?;
+                let last_name: Option<String> = row.get(4)?;
+                let course: Option<String> = row.get(5)?;
+                let department: Option<String> = row.get(6)?;
+                let position: Option<String> = row.get(7)?;
+                let major: Option<String> = row.get(8)?;
+                let year_level: Option<String> = row.get(9)?;
+                let is_active: bool = row.get(10)?;
+                
+                debug!(
+                    "Detailed School Account Information for ID {}: \
+                    Name: {} {} {} | Course: {:?} | \
+                    Department: {:?} | Position: {:?} | Major: {:?} | \
+                    Year Level: {:?} | Active: {} | Computed Classification: {}",
+                    attendance.school_id,
+                    first_name.unwrap_or_default(),
+                    middle_name.unwrap_or_default(),
+                    last_name.unwrap_or_default(),
+                    course,
+                    department,
+                    position,
+                    major,
+                    year_level,
+                    is_active,
+                    classification
+                );
+                
+                Ok((name, classification))
             }
         ) {
-            Ok((name, class_type)) => (name, class_type),
-            Err(_) => {
-                // If no school account found, use the provided full name and default classification
+            Ok((name, class_type)) => {
+                info!("Successfully retrieved school account details");
+                debug!("Using school account data - Name: {}, Classification: {}", name, class_type);
+                (name, class_type)
+            },
+            Err(e) => {
+                warn!("School account not found: {}", e);
+                
                 if attendance.full_name.is_empty() {
+                    error!("No school account found and no full name provided");
                     let err = rusqlite::Error::InvalidParameterName("School ID not found".to_string());
-                    error!("Failed to create attendance record: {}", err);
                     return Err(err);
                 }
-                (attendance.full_name.clone(), "Faculty".to_string())
+                
+                debug!("Falling back to provided values - Name: {}, Classification: Unknown", 
+                    attendance.full_name);
+                
+                (attendance.full_name.clone(), "Unknown".to_string())
             }
         };
         
-        // Generate a new UUID for the attendance record
+        // Override or validate input classification
+        let final_classification = if !attendance.classification.is_empty() {
+            attendance.classification.clone()
+        } else {
+            classification
+        };
+        
         let id = Uuid::new_v4();
         let time_in_date = Utc::now();
-        
-        // Validate required fields
-        if attendance.school_id.is_empty() {
-            let err = rusqlite::Error::InvalidParameterName("School ID cannot be empty".to_string());
-            error!("Failed to create attendance record: {}", err);
-            return Err(err);
-        }
-        
         let time_in_str = time_in_date.to_rfc3339();
         
-        // Insert the attendance record with dynamically determined classification
-        conn.execute(
+        debug!("Preparing database insertion with values:");
+        debug!("  - ID: {}", id);
+        debug!("  - School ID: {}", attendance.school_id);
+        debug!("  - Full Name: {}", full_name);
+        debug!("  - Time In: {}", time_in_str);
+        debug!("  - Classification: {}", final_classification);
+        debug!("  - Purpose ID: {:?}", attendance.purpose_id);
+        
+        // Log the actual SQL operation
+        info!("Executing database insertion");
+        match conn.execute(
             "INSERT INTO attendance (
                 id, school_id, full_name, time_in_date, classification, purpose_id
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -109,27 +173,28 @@ impl AttendanceRepository for SqliteAttendanceRepository {
                 attendance.school_id,
                 full_name,
                 time_in_str,
-                classification,
+                final_classification,
                 attendance.purpose_id.map(|id| id.to_string())
             ],
-        )?;
+        ) {
+            Ok(_) => debug!("Database insertion successful"),
+            Err(e) => {
+                error!("Database insertion failed: {}", e);
+                return Err(e);
+            }
+        }
         
-        // Construct and return the Attendance struct
         let created_attendance = Attendance {
             id,
             school_id: attendance.school_id,
             full_name,
             time_in_date,
-            classification,
+            classification: final_classification,
             purpose_id: attendance.purpose_id,
         };
         
-        info!(
-            "Successfully created attendance record: ID={}, SchoolID={}, Classification={}",
-            created_attendance.id,
-            created_attendance.school_id,
-            created_attendance.classification
-        );
+        info!("Successfully created attendance record:");
+        debug!("Created attendance details: {:?}", created_attendance);
         
         Ok(created_attendance)
     }
