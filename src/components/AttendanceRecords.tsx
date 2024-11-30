@@ -1,15 +1,19 @@
-// Attendance.tsx
+// AttendanceRecords.tsx
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { AttendanceApi, AttendanceWithDates, UpdateAttendanceRequest } from '../lib/attendance'
 import { logger, LogLevel } from '../lib/logger'
+import { downloadAttendanceTableAsPDF } from '@/utils/pdfUtils'
 import { ToastProvider, ToastViewport } from "@/components/ui/toast"
+import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import AuthModal from './AuthModal'
 import AttendanceCard from './attendance/AttendanceCard'
+import AttendanceTable from './attendance/AttendanceTable'
 import SearchBar from './SearchBar'
+import ViewToggle from './ViewToggle'
 
-const Records: React.FC = () => {
+const AttendanceRecords: React.FC = () => {
   // States
   const [attendances, setAttendances] = useState<AttendanceWithDates[]>([])
   const [loading, setLoading] = useState(true)
@@ -20,6 +24,7 @@ const Records: React.FC = () => {
   const [authAction, setAuthAction] = useState<'create' | 'delete'>('create')
   const [credentials, setCredentials] = useState<{ username: string; password: string }>({ username: '', password: '' })
   const [attendanceToDelete, setAttendanceToDelete] = useState<string | null>(null)
+  const [view, setView] = useState<'card' | 'table'>('card')
 
   const { toast } = useToast()
 
@@ -60,15 +65,6 @@ const Records: React.FC = () => {
   const handleSearch = useCallback(async () => {
     try {
       setLoading(true)
-      // Note: You'll need to implement searchAttendances in AttendanceApi
-      // if (searchQuery.trim()) {
-      //   const searchResults = await AttendanceApi.searchAttendances(searchQuery)
-      //   setAttendances(searchResults)
-      //   setSearchStatus(`Found ${searchResults.length} attendance record${searchResults.length !== 1 ? 's' : ''}`)
-      // } else {
-      //   await fetchAttendances()
-      //   setSearchStatus(null)
-      // }
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to search attendances')
@@ -132,6 +128,14 @@ const Records: React.FC = () => {
     }
   }
 
+  const handleDownloadPDF = useCallback(() => {
+    if (attendances.length > 0) {
+      downloadAttendanceTableAsPDF(attendances)
+    } else {
+      addToast('No attendance records to download', 'error')
+    }
+  }, [attendances, addToast])
+
   // Effects
   useEffect(() => {
     const handleLog = (log: { message: string; level: LogLevel }) => {
@@ -167,12 +171,17 @@ const Records: React.FC = () => {
           </div>
         )}
 
-
-        <SearchBar
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          handleClearSearch={handleClearSearch}
-        />
+        <div className="flex items-center mb-4 space-x-4">
+          <SearchBar
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            handleClearSearch={handleClearSearch}
+          />
+          <ViewToggle
+            view={view} 
+            onViewChange={setView} 
+          />
+        </div>
 
         {searchStatus && (
           <div className="mb-4 text-sm text-muted-foreground">
@@ -180,20 +189,29 @@ const Records: React.FC = () => {
           </div>
         )}
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {attendances.map((attendance) => (
-            <AttendanceCard
-              key={attendance.id}
-              attendance={attendance}
-              onUpdate={handleUpdateAttendance}
-              onDelete={(attendanceId) => {
-                setAttendanceToDelete(attendanceId)
-                setAuthAction('delete')
-                setIsAuthModalOpen(true)
-              }}
-            />
-          ))}
-        </div>
+        {view === 'card' ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {attendances.map((attendance) => (
+              <AttendanceCard
+                key={attendance.id}
+                attendance={attendance}
+                onUpdate={handleUpdateAttendance}
+                onDelete={(attendanceId) => {
+                  setAttendanceToDelete(attendanceId)
+                  setAuthAction('delete')
+                  setIsAuthModalOpen(true)
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          <>
+          <Button onClick={handleDownloadPDF} className="mb-4">
+            Download Attendance Table in PDF
+          </Button>
+          <AttendanceTable attendances={attendances} />
+        </>
+        )}
       </div>
       <ToastViewport />
       <AuthModal
@@ -206,4 +224,4 @@ const Records: React.FC = () => {
   )
 }
 
-export default Records
+export default AttendanceRecords

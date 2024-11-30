@@ -4,7 +4,7 @@ import Attendance from './components/Attendance';
 import SchoolAccounts from "./components/SchoolAccounts";
 import Navbar from "./components/Navbar";
 import Sidebar from "./components/Sidebar";
-import Records from "./components/Records";
+import AttendanceRecords from "./components/AttendanceRecords";
 
 function App() {
   return (
@@ -21,7 +21,7 @@ function App() {
                 <div className="h-full overflow-y-auto">
                   <Routes>
                     <Route path="/" element={<SchoolAccounts />} />
-                    <Route path="records" element={<Records />} />
+                    <Route path="/records" element={<AttendanceRecords />} />
                     <Route path="/attendance" element={<Attendance />} />
                   </Routes>
                 </div>
