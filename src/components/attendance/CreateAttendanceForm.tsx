@@ -1,3 +1,5 @@
+// components/attendance/AttendanceList.tsx
+
 import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -58,7 +60,7 @@ const CreateAttendanceForm: React.FC<CreateAttendanceFormProps> = ({ onCreateAtt
       school_id: trimmedSchoolId,
       full_name: '', // Optional, will be filled by backend
       classification: '', // Will be automatically determined by backend
-      purpose_id: selectedPurpose.id
+      purpose_label: selectedPurpose.label  // Changed from purpose_id to purpose_label
     }
 
     await onCreateAttendance(attendanceData)
@@ -98,7 +100,7 @@ const CreateAttendanceForm: React.FC<CreateAttendanceFormProps> = ({ onCreateAtt
                       label={purpose.label}
                       iconName={purpose.icon_name}
                       className={`${
-                        selectedPurpose?.id === purpose.id 
+                        selectedPurpose?.label === purpose.label 
                           ? 'border-blue-500 shadow-md bg-blue-50' 
                           : ''
                       }`}

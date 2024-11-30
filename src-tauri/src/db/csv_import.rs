@@ -23,7 +23,6 @@ pub struct ExistingAccountInfo {
     pub year_level: Option<String>,
     pub is_active: Option<bool>,
     pub last_updated_semester_id: Option<String>,
-    pub last_updated_semester: Option<String>,
     pub row_number: usize,
 }
 
@@ -99,7 +98,6 @@ impl CsvValidator {
                 "year_level".to_string(),
                 "is_active".to_string(),
                 "last_updated_semester_id".to_string(),
-                "last_updated_semester".to_string(),
             ],
             connection,
         }
@@ -128,7 +126,7 @@ impl CsvValidator {
         let query = format!(
             "SELECT id, school_id, first_name, middle_name, last_name, gender, 
                     course, department, position, major, year_level, is_active,
-                    last_updated_semester_id, last_updated_semester 
+                    last_updated_semester_id
              FROM school_accounts 
              WHERE school_id IN ({})", 
             placeholders
@@ -169,7 +167,6 @@ impl CsvValidator {
                 year_level: row.get(10).ok(),
                 is_active: row.get(11).ok(),
                 last_updated_semester_id: row.get(12).ok(),
-                last_updated_semester: row.get(13).ok(),
                 row_number: records
                     .iter()
                     .position(|record| 
@@ -205,7 +202,7 @@ impl CsvValidator {
                 account_info.major.as_deref().unwrap_or(""),
                 account_info.year_level.as_deref().unwrap_or(""),
                 account_info.is_active.unwrap_or(false),
-                account_info.last_updated_semester.as_deref().unwrap_or(""),
+                account_info.last_updated_semester_id.as_deref().unwrap_or(""),
                 account_info.row_number
             );
 

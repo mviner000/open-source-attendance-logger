@@ -10,7 +10,7 @@ import { CalendarDays } from 'lucide-react'
 import { AttendanceWithDates, UpdateAttendanceRequest } from '@/lib/attendance'
 
 interface AttendanceCardProps {
-  attendance: AttendanceWithDates
+  attendance: AttendanceWithDates & { purpose_label?: string }
   onUpdate: (attendanceId: string, updatedAttendance: UpdateAttendanceRequest) => Promise<void>
   onDelete: (attendanceId: string) => void
 }
@@ -93,8 +93,17 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ attendance, onUpdate, o
         </div>
         <div className="flex items-center text-xs text-muted-foreground mt-2 space-x-1">
           <CalendarDays className="w-4 h-4 flex-shrink-0" />
-          <span className="flex-grow mt-1">{attendance.time_in_date.toLocaleDateString()}</span>
+          <span className="flex-grow mt-1">
+              {attendance.time_in_date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}{" - "}
+              {attendance.time_in_date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+          </span>
         </div>
+        {attendance.purpose_label && (
+          <div className="flex space-x-2 items-center">
+            <span className="font-medium">Purpose:</span>
+            <span>{attendance.purpose_label}</span>
+          </div>
+        )}
       </CardContent>
       <CardFooter className="flex justify-end">
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

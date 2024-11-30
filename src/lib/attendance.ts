@@ -3,14 +3,14 @@
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from './logger';
 
-// Types from Rust implementation
+// Updated types to use purpose_label instead of purpose_id
 export interface Attendance {
   id: string;  // UUID as string
   school_id: string;
   full_name: string;
   time_in_date: string;  // DateTime<Utc> as string
   classification: string;
-  purpose_id?: string;  // Optional UUID as string
+  purpose_label?: string;  // Changed from purpose_id
 }
 
 export interface AttendanceWithDates {
@@ -19,21 +19,21 @@ export interface AttendanceWithDates {
   full_name: string;
   time_in_date: Date;
   classification: string;
-  purpose_id?: string;
+  purpose_label?: string;  // Changed from purpose_id
 }
 
 export interface CreateAttendanceRequest {
   school_id: string;
   full_name: string;
   classification: string;
-  purpose_id?: string;
+  purpose_label?: string;  // Changed from purpose_id
 }
 
 export interface UpdateAttendanceRequest {
   school_id?: string;
   full_name?: string;
   classification?: string;
-  purpose_id?: string;
+  purpose_label?: string;  // Changed from purpose_id
 }
 
 export interface Credentials {
