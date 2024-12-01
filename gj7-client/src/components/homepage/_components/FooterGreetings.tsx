@@ -52,10 +52,10 @@ const FooterGreetings = ({
 
     if (currentStep === 1) {
       return (
-        <div className="lg:ml-20 md:ml-56 -mr-2 w-full">
+        <div className="lg:ml-20 md:ml-56 w-full">
           <TypingText
             text="Please input ID or scan QR" 
-            className=" w-4/5 text-6xl font-extrabold drop-shadow"
+            className=" text-6xl font-extrabold drop-shadow"
           />
         </div>
       );
