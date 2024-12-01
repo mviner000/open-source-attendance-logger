@@ -1,3 +1,5 @@
+// src/lib.rs
+
 use tauri::{Manager, Window};
 
 #[tauri::command]

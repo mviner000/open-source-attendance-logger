@@ -1,15 +1,17 @@
+// _components/steps/Step1StudentID.tsx
+
 import React, { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
-import { env } from "@/env";
 import { cn } from "@/lib/utils";
-import { StudentInfo } from "@/types";
-import axios from "axios";
+import { useToast } from "@/hooks/use-toast";
 
 type Step1StudentIDProps = {
   setCurrentStep: (num: number) => void;
-  setStudentDetails: (detail: StudentInfo) => void;
-  studentDetails: StudentInfo | null;
+  setStudentDetails: (inputVal: string) => Promise<void>;  // Changed to match parent component
+  studentDetails: {
+    school_id: string;
+    full_name: string;
+  } | null;  // Changed to match parent component's structure
   disabled?: boolean;
 };
 
@@ -31,12 +33,7 @@ const Step1StudentID: React.FC<Step1StudentIDProps> = ({
     setIsLoading(true);
 
     try {
-      const { data } = await axios.get<StudentInfo>(
-        `${env.VITE_API_URL!}/accounts/${inputVal}/`,
-      );
-
-      setStudentDetails(data);
-      setCurrentStep(2);
+      await setStudentDetails(inputVal);
     } catch (error) {
       toast({
         title: "Uh oh! Something went wrong.",
