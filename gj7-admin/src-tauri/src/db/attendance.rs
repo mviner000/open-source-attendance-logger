@@ -19,7 +19,7 @@ pub struct Attendance {
 pub struct CreateAttendanceRequest {
     pub school_id: String,
     pub full_name: String,
-    pub classification: String,
+    pub classification: Option<String>,
     pub purpose_label: Option<String>,
 }
 
@@ -68,9 +68,9 @@ impl AttendanceRepository for SqliteAttendanceRepository {
                     CASE 
                         WHEN position IS NOT NULL AND position != '' THEN 'Faculty'
                         WHEN course IS NOT NULL AND course != '' THEN course
-                        ELSE 'Unknown'
+                        ELSE 'Visitor'  // Changed from 'Unknown' to 'Visitor'
                     END, 
-                    'Unknown'
+                    'Visitor'
                 ) as computed_classification
             FROM school_accounts 
             WHERE school_id = ?2",
@@ -88,15 +88,14 @@ impl AttendanceRepository for SqliteAttendanceRepository {
                     return Err(err);
                 }
                 
-                (attendance.full_name.clone(), "Unknown".to_string())
+                (attendance.full_name.clone(), "Visitor".to_string())
             }
         };
         
-        let final_classification = if !attendance.classification.is_empty() {
-            attendance.classification.clone()
-        } else {
-            classification
-        };
+        // Modify classification logic
+        let final_classification = attendance.classification
+            .clone()
+            .unwrap_or_else(|| classification);
         
         let id = Uuid::new_v4();
         let time_in_date = Utc::now();

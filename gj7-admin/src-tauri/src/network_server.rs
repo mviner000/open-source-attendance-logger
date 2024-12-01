@@ -7,7 +7,6 @@ use axum::{
 };
 use rusqlite::{Connection, params};
 use tokio::net::TcpListener;
-use std::sync::Arc;
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use tower_http::cors::CorsLayer;
@@ -27,6 +26,16 @@ pub struct PurposeLookup {
     pub icon_name: String,
 }
 
+
+// Use the Attendance and CreateAttendanceRequest from your db/attendance.rs
+use crate::db::attendance::{
+    Attendance, 
+    CreateAttendanceRequest, 
+    SqliteAttendanceRepository, 
+    AttendanceRepository
+
+};
+
 // DatabaseAccessor struct
 #[derive(Clone)]
 struct DatabaseAccessor {
@@ -40,6 +49,39 @@ impl DatabaseAccessor {
         }
     }
 }
+
+
+
+
+async fn create_attendance_handler(
+    State(db_accessor): State<DatabaseAccessor>,
+    Json(attendance_req): Json<CreateAttendanceRequest>
+) -> Result<Json<Attendance>, (StatusCode, String)> {
+    // Wrap the entire handler logic in a blocking task
+    let result = tokio::task::spawn_blocking(move || {
+        // Open database connection
+        let conn = match Connection::open(&db_accessor.db_path) {
+            Ok(conn) => conn,
+            Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+        };
+
+        // Use the repository to create attendance
+        let repo = SqliteAttendanceRepository;
+        repo.create_attendance(&conn, attendance_req)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+    })
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Unwrap the result and wrap it in Json
+    Ok(Json(result?))
+}
+
+
+
+
+
+
 
 // Original handler logic
 async fn school_id_lookup_handler(
@@ -145,6 +187,7 @@ pub async fn start_network_server(db: Database) -> Result<(), Box<dyn std::error
     // Create Axum router
     let app = Router::new()
         .route("/school_id/:school_id", get(wrapped_school_id_lookup_handler))
+        .route("/attendance", post(create_attendance_handler)) // New attendance creation endpoint
         .layer(cors)
         .with_state(db_accessor);
 
