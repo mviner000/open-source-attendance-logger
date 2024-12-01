@@ -23,7 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { FileSpreadsheet, AlertCircle, AlertTriangle, CheckCircle, FileUp, ClipboardCheck, Upload, Check, TriangleAlertIcon, SquareLibrary, MoveRight } from 'lucide-react';
+import { FileSpreadsheet, AlertCircle, CheckCircle, FileUp, ClipboardCheck, Upload, Check, SquareLibrary, MoveRight } from 'lucide-react';
 import { CsvHeaderValidationErrors } from './CsvHeaderValidationErrors';
 import CsvContentValidationErrors from './CsvContentValidationErrors';
 import { SchoolAccount } from '@/lib/school_accounts';

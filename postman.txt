@@ -1,0 +1,8 @@
+{
+  "school_id": "ST001",
+  "full_name": "John Doe",
+  "classification": "Student",
+  "purpose_label": "Regular Class"
+}
+
+http://localhost:8080/attendance

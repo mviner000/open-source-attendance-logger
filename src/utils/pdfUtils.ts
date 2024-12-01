@@ -6,7 +6,6 @@ const PAGE_WIDTH = 330.2 // Legal Landscape width in mm (13 inches = 330.2mm)
 const PAGE_HEIGHT = 215.9 // Legal Landscape height in mm (8.5 inches = 215.9mm)
 const MARGIN = 12.7 // 0.5 inches in mm
 const CONTENT_WIDTH = PAGE_WIDTH - (MARGIN * 2)
-const CONTENT_HEIGHT = PAGE_HEIGHT - (MARGIN * 2)
 const ROW_HEIGHT = 5 
 const ROWS_PER_PAGE = 30
 const HEADER_HEIGHT = 29
