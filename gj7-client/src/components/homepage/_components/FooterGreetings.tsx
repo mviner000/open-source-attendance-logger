@@ -1,15 +1,13 @@
-// _components/FooterGreetings.tsx
-
+import { lazy, Suspense, useEffect, useState } from "react";
 import Gradient from "@/components/Gradient";
-import { SchoolAccount } from "@/types/school_accounts";
-import { Attendance } from "@/types/attendance"
-import { useEffect, useState, lazy, Suspense } from "react";
+import { Attendance } from "@/types/attendance";
+import { DURATIONS } from "./steps/config/durations";
+import TypingText from "./TypingText";
 
-// Replace next/dynamic with React.lazy
 const Clock = lazy(() => import("@/components/Clock"));
 
 type Props = {
-  studentDetails: SchoolAccount | null;
+  studentDetails: { school_id: string; full_name: string } | null;
   currentStep: number;
   setCurrentStep: (num: number) => void;
   responseData: Attendance | null;
@@ -27,9 +25,52 @@ const FooterGreetings = ({
     setMilitaryTime(localStorage.getItem("militaryTime") === "true");
   }, []);
 
-  const text = studentDetails
-    ? `Hello ${studentDetails?.full_name}! What brings you to the library today?`
-    : "Please input ID or scan  QR";
+  const renderMessage = () => {
+    if (currentStep === 4 && responseData) {
+      return (
+        <div className="h-[180px] w-4/6 ml-20">
+          <TimedMessage
+            message="Processing... Wait to finish loading..."
+            duration={DURATIONS.PROCESSING_SCREEN}
+            setCurrentStep={setCurrentStep}
+          />
+        </div>
+      );
+    }
+
+    if (currentStep === 3) {
+      return (
+        <div className="h-[180px] w-5/6 ml-20">
+          <TimedMessage
+            message="Your time is logged in. Enjoy your visit at GJC Library"
+            duration={DURATIONS.SUCCESS_SCREEN}
+            setCurrentStep={setCurrentStep}
+          />
+        </div>
+      );
+    }
+
+    if (currentStep === 1) {
+      return (
+        <div className="lg:ml-20 md:ml-56 -mr-2 w-full">
+          <TypingText
+            text="Please input ID or scan QR" 
+            className=" w-4/5 text-6xl font-extrabold drop-shadow"
+          />
+        </div>
+      );
+    }
+
+    if (currentStep === 2 && studentDetails) {
+      return (
+        <div className="lg:ml-20 md:ml-56 -mr-2 w-full">
+          Hello {studentDetails.full_name}! What brings you to the library today?
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <div className="mt-20 flex w-full items-center gap-16 bg-gradient-to-r from-[#035A19] to-[#E0A000]/75 px-16 py-6 font-oswald">
@@ -41,30 +82,13 @@ const FooterGreetings = ({
         </Gradient>
       </p>
 
-      <div className="-ml-48  text-6xl font-extrabold drop-shadow">
-        {currentStep === 4 && responseData ? (
-          <TimedMessage
-            message="Your quote of the day. Wait to finish loading..."
-            duration={8}
-            setCurrentStep={setCurrentStep}
-          />
-        ) : currentStep === 3 ? (
-          <TimedMessage
-            message="Your time is logged in. Enjoy your visit at GJC Library"
-            duration={2}
-            setCurrentStep={setCurrentStep}
-          />
-        ) : (
-          <div className="lg:ml-20 md:ml-56 -mr-2 w-full">
-          {text}
-          </div>
-        )}
+      <div className="-ml-48 w-4/5 text-6xl font-extrabold drop-shadow">
+        {renderMessage()}
       </div>
     </div>
   );
 };
 
-// TimedMessage component remains the same
 type TimedMessageProps = {
   message: string;
   duration: number;
@@ -77,7 +101,7 @@ const TimedMessage = ({ message, duration, setCurrentStep }: TimedMessageProps) 
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft((prev) => prev - 1);
-    }, 1000);
+    }, DURATIONS.COUNTDOWN_INTERVAL);
 
     const timeout = setTimeout(() => {
       setCurrentStep(1);

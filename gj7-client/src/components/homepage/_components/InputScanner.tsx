@@ -2,39 +2,36 @@ import { useState } from "react";
 import { Attendance, CreateAttendanceRequest } from "@/types/attendance";
 import { SchoolIdLookupResponse } from "@/types/school_accounts";
 import axios from "axios";
-import Step1StudentID from "./steps/Step1StudentID";
+import Step1SchoolID from "./steps/Step1SschoolID";
 import Step2ChoosePurpose from "./steps/Step2ChoosePurpose";
 import FooterGreetings from "./FooterGreetings";
 import Step3Confirmation from "./steps/Step3Confirmation";
 import Step4QuoteOfTheDay from "./steps/Step4QuoteOfTheDay";
 import { useToast } from "@/hooks/use-toast";
+import { DURATIONS } from "./steps/config/durations";
 
 const InputScanner = () => {
   const [currentStep, setCurrentStep] = useState(1);
-  const [schoolInfo, setSchoolInfo] = useState<SchoolIdLookupResponse | null>(null);
+  const [accountInfo, setAccountInfo] = useState<SchoolIdLookupResponse | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isError, setIsError] = useState(false);
   const [responseData, setResponseData] = useState<Attendance | null>(null);
-  const [inputVal, setInputVal] = useState(""); // Store school ID here
+  const [inputVal, setInputVal] = useState(""); 
   const { toast } = useToast();
 
-  const fetchStudentDetails = async (studentId: string) => {
+  const fetchStudentDetails = async (schoolId: string) => {
     try {
-      // Explicitly set the inputVal when fetching details
-      setInputVal(studentId);
+      setInputVal(schoolId);
 
-      console.log('Fetching details for school ID:', studentId);
+      console.log('Fetching details for school ID:', schoolId);
       const response = await axios.get<SchoolIdLookupResponse>(
-        `http://localhost:8080/school_id/${studentId}`
+        `http://localhost:8080/school_id/${schoolId}`
       );
       
-      // Verify data before setting state
       if (response.data && response.data.full_name) {
-        setSchoolInfo(response.data);
+        setAccountInfo(response.data);
         setCurrentStep(2);
       } else {
         console.error('Invalid response structure');
-        setIsError(true);
         toast({
           title: "Error",
           description: "Invalid student information",
@@ -42,13 +39,10 @@ const InputScanner = () => {
         });
       }
     } catch (error) {
-      setIsError(true);
       console.error("Invalid ID:", error);
       
-      // Reset inputVal if fetch fails
       setInputVal("");
       
-      // More detailed error logging
       if (axios.isAxiosError(error)) {
         if (error.response) {
           console.error('Error response:', error.response.data);
@@ -65,14 +59,13 @@ const InputScanner = () => {
   };
 
   const handleScan = async (purposeLabel: string) => {
-    // Comprehensive logging of inputs
     console.group('Attendance Creation Debug');
     console.log('School ID:', inputVal);
-    console.log('Full Name:', schoolInfo?.full_name);
+    console.log('Full Name:', accountInfo?.full_name);
     console.log('Purpose Label:', purposeLabel);
-    console.log('Complete School Info:', JSON.stringify(schoolInfo, null, 2));
+    console.log('Complete School Info:', JSON.stringify(accountInfo, null, 2));
   
-    if (!schoolInfo || !inputVal) {
+    if (!accountInfo || !inputVal) {
       console.error('Missing school information or input value');
       toast({
         title: "Error",
@@ -84,12 +77,10 @@ const InputScanner = () => {
     }
     
     setIsSubmitting(true);
-    setIsError(false);
     try {
-      // Detailed data preparation logging
       const dataToSend: CreateAttendanceRequest = {
         school_id: inputVal,
-        full_name: schoolInfo.full_name,
+        full_name: accountInfo.full_name,
         purpose_label: purposeLabel,
       };
       
@@ -104,19 +95,24 @@ const InputScanner = () => {
       
       setResponseData(response.data);
       
-      // Log classification from response
       console.log('Attendance Classification:', response.data.classification);
       
+      // Move to Quote of the Day screen
       setCurrentStep(4);
       
+      // Dynamic timeout to move to success screen and reset
       setTimeout(() => {
         setCurrentStep(3);
-        setSchoolInfo(null);
+      }, DURATIONS.PROCESSING_SCREEN * 1000);
+
+      // Additional timeout to reset entire state
+      setTimeout(() => {
+        setAccountInfo(null);
         setResponseData(null);
-        setInputVal(""); // Reset input value
-      }, 7000);
+        setInputVal(""); 
+        setCurrentStep(1);
+      }, (DURATIONS.PROCESSING_SCREEN + DURATIONS.SUCCESS_SCREEN) * 1000);
     } catch (error) {
-      setIsError(true);
       console.error("Error creating attendance:", error);
   
       if (axios.isAxiosError(error)) {
@@ -156,7 +152,7 @@ const InputScanner = () => {
       <Step2ChoosePurpose
         handleScan={handleScan}
         isSubmitting={isSubmitting}
-        availablePurposes={schoolInfo?.purposes || {}}
+        availablePurposes={accountInfo?.purposes || {}}
       />
     </div>
   );
@@ -179,10 +175,10 @@ const InputScanner = () => {
         <div className="col-span-1 flex items-center justify-center">
           <div className="flex flex-col">
             <QRCodeSection />
-            <Step1StudentID
-              studentDetails={schoolInfo ? {
+            <Step1SchoolID
+              studentDetails={accountInfo ? {
                 school_id: inputVal,
-                full_name: schoolInfo.full_name
+                full_name: accountInfo.full_name
               } : null}
               setCurrentStep={setCurrentStep}
               setStudentDetails={fetchStudentDetails}
@@ -195,12 +191,12 @@ const InputScanner = () => {
         {currentStep === 4 && renderStep4Content()}
       </div>
       <FooterGreetings
+        studentDetails={accountInfo ? {
+          school_id: inputVal,
+          full_name: accountInfo.full_name
+        } : null}
         currentStep={currentStep}
         setCurrentStep={setCurrentStep}
-        studentDetails={schoolInfo ? {
-          school_id: inputVal,
-          full_name: schoolInfo.full_name
-        } : null}
         responseData={responseData}
       />
     </>
