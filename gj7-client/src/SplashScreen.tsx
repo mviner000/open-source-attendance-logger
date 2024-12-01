@@ -1,3 +1,5 @@
+// src/SplashScreen.tsx
+
 import React, { useEffect } from 'react';
 import Lottie from 'lottie-react';
 import cloudLoadingAnimation from './assets/loading_splashscreen_bg_spinner.json';
@@ -10,7 +12,7 @@ const Splashscreen: React.FC = () => {
       // Get the current window and close it
       const currentWindow = await Window.getCurrent();
       await currentWindow.close();
-    }, 5000); // 5 seconds delay
+    }, 10000); // 5 seconds delay
 
     return () => clearTimeout(timer);
   }, []);

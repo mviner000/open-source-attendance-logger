@@ -1,6 +1,8 @@
+// _components/steps/Step2ChoosePurpose.tsx
+
 import { Button } from "@/components/ui/button";
 
-type ChoosePurposeProps = {
+type Step2ChoosePurposeProps = {
   handleScan: (purpose: string) => void;
   isSubmitting: boolean;
 };
@@ -52,12 +54,12 @@ const Purposes = [{
   },
 ];
 
-const ChoosePurpose: React.FC<ChoosePurposeProps> = ({
+const Step2ChoosePurpose: React.FC<Step2ChoosePurposeProps> = ({
   handleScan,
   isSubmitting,
 }) => {
   return (
-    <div className="grid grid-cols-3 items-center justify-between gap-4">
+    <div className="grid grid-cols-3 items-center justify-between gap-4 md:ml-28 lg:ml-64">
       {Purposes.map((purpose) => (
         <Button
           key={purpose.name}
@@ -85,4 +87,4 @@ const ChoosePurpose: React.FC<ChoosePurposeProps> = ({
   );
 };
 
-export default ChoosePurpose;
+export default Step2ChoosePurpose;

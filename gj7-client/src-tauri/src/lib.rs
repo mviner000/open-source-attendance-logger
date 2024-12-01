@@ -35,7 +35,7 @@ pub fn run() {
             splashscreen.show().unwrap();
 
             std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_secs(2));
+                std::thread::sleep(std::time::Duration::from_secs(10));
                 
                 tauri::async_runtime::block_on(async move {
                     // Make sure the window is fullscreen before showing it

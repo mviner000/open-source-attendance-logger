@@ -1,3 +1,5 @@
+// src/components/Navbar.tsx
+
 import React from "react";
 import { Link } from 'react-router-dom';
 import { X, Minus } from 'lucide-react';
@@ -54,12 +56,14 @@ const Navbar: React.FC = () => {
               alt="GJCLibrary Logo"
               className="h-10 w-10 mr-3 object-cover"
             />
-            <h1
-                style={{
-                    WebkitTextStroke: "1px #198835",
-                }}
-            className="font-black -ml-1 text-2xl text-white">GJCLibrary
-            </h1>
+            <div className="flex mt-1">
+              <h1
+                className="static font-black text-2xl text-black">GJCLibrary
+              </h1>
+              <h1
+                className="relative right-[124px] bottom-[2px] font-black -ml-[5px] text-2xl text-white">GJCLibrary
+              </h1>
+            </div>
           </Link>
         </div>
       </div>

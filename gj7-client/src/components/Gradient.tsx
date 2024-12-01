@@ -6,7 +6,7 @@ interface Props {
 
 const Gradient: FC<Props> = ({ children }) => {
   return (
-    <span className="bg-gradient-to-r from-[#00cc66] to-[#00ffd9] bg-clip-text text-transparent">
+    <span className="text-7xl bg-gradient-to-r from-[#00cc66] to-[#00ffd9] bg-clip-text text-transparent">
       {children}
     </span>
   );

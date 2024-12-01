@@ -1,3 +1,5 @@
+// _components/FooterGreetings.tsx
+
 import Gradient from "@/components/Gradient";
 import { StudentInfo, Attendance } from "@/types";
 import { useEffect, useState, lazy, Suspense } from "react";
@@ -29,8 +31,8 @@ const FooterGreetings = ({
     : "Please input ID or scan  QR Code";
 
   return (
-    <div className="z-10 mt-20 flex w-full items-center gap-16 bg-gradient-to-r from-[#035A19] to-[#E0A000]/75 px-16 py-4 font-oswald">
-      <p className="text-5xl font-bold drop-shadow w-1/2">
+    <div className="mt-20 flex w-full items-center gap-16 bg-gradient-to-r from-[#035A19] to-[#E0A000]/75 px-16 py-6 font-oswald">
+      <p className="font-bold drop-shadow lg:w-1/2 md:w-4/5">
         <Gradient>
           <Suspense fallback={<span>Loading...</span>}>
             <Clock militaryTime={militaryTime} />
@@ -38,7 +40,7 @@ const FooterGreetings = ({
         </Gradient>
       </p>
 
-      <div className="-ml-48 text-6xl font-semibold drop-shadow">
+      <div className="-ml-48 text-6xl font-extrabold drop-shadow">
         {currentStep === 4 && responseData ? (
           <TimedMessage
             message="Your quote of the day. Wait to finish loading..."

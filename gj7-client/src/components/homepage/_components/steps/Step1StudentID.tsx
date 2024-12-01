@@ -1,24 +1,24 @@
-"use client";
+import React, { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 import { StudentInfo } from "@/types";
 import axios from "axios";
-import { Loader2 } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
 
-type Props = {
-  studentDetails: StudentInfo | null;
+type Step1StudentIDProps = {
   setCurrentStep: (num: number) => void;
   setStudentDetails: (detail: StudentInfo) => void;
+  studentDetails: StudentInfo | null;
+  disabled?: boolean;
 };
 
-const InputID = ({
+const Step1StudentID: React.FC<Step1StudentIDProps> = ({
   setCurrentStep,
   setStudentDetails,
   studentDetails,
-}: Props) => {
+  disabled = false,
+}) => {
   const [isError, setIsError] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [inputVal, setInputVal] = useState("");
@@ -43,7 +43,7 @@ const InputID = ({
         description: "There was a problem with your request.",
       });
       setIsError(true);
-      console.log("Error verifiying" + error);
+      console.log("Error verifying" + error);
       setInputVal("");
     } finally {
       setIsLoading(false);
@@ -53,7 +53,7 @@ const InputID = ({
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      if (inputRef.current && document.activeElement !== inputRef.current) {
+      if (!disabled && inputRef.current && document.activeElement !== inputRef.current) {
         inputRef.current.focus();
       }
     };
@@ -63,38 +63,37 @@ const InputID = ({
     return () => {
       document.removeEventListener("keydown", handleKeyPress);
     };
-  }, []);
+  }, [disabled]);
 
   useEffect(() => {
-    // After
     if (!studentDetails) {
       setInputVal("");
     }
   }, [studentDetails]);
 
   return (
-    <div className="relative">
+    <div className="mt-28 -ml-6">
       <Input
         ref={inputRef}
         placeholder={isError ? "ID Not Found. Please try again." : "Student ID"}
         className={cn(
           isError ? "placeholder:text-red-600" : "placeholder:text-[#CBD5E1]",
           "w-full max-w-[370px] border border-customGreen2 bg-black/45 py-6 text-center text-3xl text-white outline-none placeholder:font-3xl",
+          disabled && "opacity-50 cursor-not-allowed"
         )}
         maxLength={8}
         value={inputVal}
         onChange={(e) => setInputVal(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && inputVal) {
+          if (e.key === "Enter" && inputVal && !disabled) {
             handleVerify();
           }
         }}
-        disabled={isLoading || inputVal === studentDetails?.school_id}
-        autoFocus
+        disabled={isLoading || inputVal === studentDetails?.school_id || disabled}
+        autoFocus={!disabled}
       />
     </div>
   );
 };
 
-
-export default InputID;
+export default Step1StudentID;
