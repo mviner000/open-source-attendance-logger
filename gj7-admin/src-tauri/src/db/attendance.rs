@@ -52,6 +52,7 @@ impl AttendanceRepository for SqliteAttendanceRepository {
             return Err(err);
         }
         
+        // Modify the query to fetch more detailed information
         let (full_name, classification) = match conn.query_row(
             "SELECT 
                 COALESCE(
@@ -66,9 +67,9 @@ impl AttendanceRepository for SqliteAttendanceRepository {
                 ) as computed_full_name,
                 COALESCE(
                     CASE 
-                        WHEN position IS NOT NULL AND position != '' THEN 'Faculty'
                         WHEN course IS NOT NULL AND course != '' THEN course
-                        ELSE 'Visitor'  // Changed from 'Unknown' to 'Visitor'
+                        WHEN position IS NOT NULL AND position != '' THEN 'Faculty'
+                        ELSE 'Visitor'
                     END, 
                     'Visitor'
                 ) as computed_classification
@@ -92,7 +93,8 @@ impl AttendanceRepository for SqliteAttendanceRepository {
             }
         };
         
-        // Modify classification logic
+        // Prioritize explicitly provided classification, 
+        // otherwise use the looked-up classification
         let final_classification = attendance.classification
             .clone()
             .unwrap_or_else(|| classification);

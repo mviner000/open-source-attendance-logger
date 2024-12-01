@@ -1,18 +1,20 @@
 // _components/steps/Step1StudentID.tsx
-
 import React, { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
+// types for Step1StudentID
 type Step1StudentIDProps = {
   setCurrentStep: (num: number) => void;
-  setStudentDetails: (inputVal: string) => Promise<void>;  // Changed to match parent component
+  setStudentDetails: (inputVal: string) => Promise<void>;
   studentDetails: {
     school_id: string;
     full_name: string;
-  } | null;  // Changed to match parent component's structure
+  } | null;
   disabled?: boolean;
+  // Optional callback if you want to pass verified school ID
+  onStudentVerify?: (schoolId: string) => void;
 };
 
 const Step1StudentID: React.FC<Step1StudentIDProps> = ({
@@ -20,6 +22,7 @@ const Step1StudentID: React.FC<Step1StudentIDProps> = ({
   setStudentDetails,
   studentDetails,
   disabled = false,
+  onStudentVerify, // Make this optional in the destructuring
 }) => {
   const [isError, setIsError] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -34,6 +37,11 @@ const Step1StudentID: React.FC<Step1StudentIDProps> = ({
 
     try {
       await setStudentDetails(inputVal);
+      
+      // Only call onStudentVerify if it exists
+      if (onStudentVerify) {
+        onStudentVerify(inputVal);
+      }
     } catch (error) {
       toast({
         title: "Uh oh! Something went wrong.",

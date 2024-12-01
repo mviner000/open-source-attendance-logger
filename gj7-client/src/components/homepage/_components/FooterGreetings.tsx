@@ -1,14 +1,15 @@
 // _components/FooterGreetings.tsx
 
 import Gradient from "@/components/Gradient";
-import { StudentInfo, Attendance } from "@/types";
+import { SchoolAccount } from "@/types/school_accounts";
+import { Attendance } from "@/types/attendance"
 import { useEffect, useState, lazy, Suspense } from "react";
 
 // Replace next/dynamic with React.lazy
 const Clock = lazy(() => import("@/components/Clock"));
 
 type Props = {
-  studentDetails: StudentInfo | null;
+  studentDetails: SchoolAccount | null;
   currentStep: number;
   setCurrentStep: (num: number) => void;
   responseData: Attendance | null;
@@ -27,8 +28,8 @@ const FooterGreetings = ({
   }, []);
 
   const text = studentDetails
-    ? `Hello ${studentDetails?.first_name}! What brings you to the library today?`
-    : "Please input ID or scan  QR Code";
+    ? `Hello ${studentDetails?.full_name}! What brings you to the library today?`
+    : "Please input ID or scan  QR";
 
   return (
     <div className="mt-20 flex w-full items-center gap-16 bg-gradient-to-r from-[#035A19] to-[#E0A000]/75 px-16 py-6 font-oswald">
@@ -40,7 +41,7 @@ const FooterGreetings = ({
         </Gradient>
       </p>
 
-      <div className="-ml-48 text-6xl font-extrabold drop-shadow">
+      <div className="-ml-48  text-6xl font-extrabold drop-shadow">
         {currentStep === 4 && responseData ? (
           <TimedMessage
             message="Your quote of the day. Wait to finish loading..."
@@ -54,7 +55,9 @@ const FooterGreetings = ({
             setCurrentStep={setCurrentStep}
           />
         ) : (
-          text
+          <div className="lg:ml-20 md:ml-56 -mr-2 w-full">
+          {text}
+          </div>
         )}
       </div>
     </div>

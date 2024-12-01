@@ -10,12 +10,14 @@ export interface SchoolAccount {
   course?: string | null;
 }
 
+// types/school_accounts.ts
 export interface SchoolIdLookupResponse {
+  school_id: string;
   full_name: string;
-  purposes: Record<string, PurposeInfo>;
-}
-
-interface PurposeInfo {
-  label: string;
-  icon_name: string;
+  purposes: {
+    [key: string]: {
+      label: string;
+      icon_name: string;
+    }
+  };
 }

@@ -78,11 +78,6 @@ async fn create_attendance_handler(
 }
 
 
-
-
-
-
-
 // Original handler logic
 async fn school_id_lookup_handler(
     State(db_accessor): State<DatabaseAccessor>,
