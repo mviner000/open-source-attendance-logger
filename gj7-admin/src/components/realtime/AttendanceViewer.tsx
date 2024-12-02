@@ -9,15 +9,31 @@ const AttendanceViewer: React.FC = () => {
   // Move formatDate to be a useCallback to ensure it's always defined
   const formatDate = useCallback((dateString: string) => {
     try {
-      const parsedDate = parseISO(dateString);
-      return isValid(parsedDate) 
-        ? format(parsedDate, 'yyyy-MM-dd HH:mm:ss')
-        : 'Invalid Date';
+      // Ensure the input is a string
+      if (typeof dateString !== 'string') {
+        console.error('Invalid date input:', dateString);
+        return 'Invalid Date';
+      }
+  
+      // Handle different potential date formats
+      let parsedDate: Date;
+      
+      // Try parsing as ISO string first
+      parsedDate = new Date(dateString);
+      
+      // If parsing fails, try more explicit parsing
+      if (isNaN(parsedDate.getTime())) {
+        console.error('Failed to parse date:', dateString);
+        return 'Invalid Date';
+      }
+  
+      // Format the date
+      return format(parsedDate, 'yyyy-MM-dd HH:mm:ss');
     } catch (error) {
       console.error('Date parsing error:', error);
       return 'Invalid Date';
     }
-  }, []); // Empty dependency array means this function never changes
+  }, []); // Empty dependency array
 
   // Add useEffect to log when attendances are fetched
   useEffect(() => {

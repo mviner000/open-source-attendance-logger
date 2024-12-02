@@ -13,6 +13,7 @@ use futures::{sink::SinkExt, stream::StreamExt};
 use tokio::sync::{mpsc, Mutex};
 use std::{collections::HashMap, sync::Arc, path::PathBuf};
 use serde::{Serialize, Deserialize};
+use serde_json::{json, Value};
 use rusqlite::Connection;
 use serde_json;
 
@@ -166,12 +167,22 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     }
     
     let sender_task = {
-        let client_id = client_id.clone();
+        let client_id_clone = client_id.clone(); // Clone before moving into the async block
         tokio::spawn(async move {
             while let Some(event) = client_rx.recv().await {
-                if let Ok(msg) = serde_json::to_string(&event) {
-                    if sender.send(axum::extract::ws::Message::Text(msg)).await.is_err() {
-                        break;
+                // Broadcast events to all clients
+                match event {
+                    AttendanceEvent::NewAttendance(attendance) => {
+                        let msg = json!({ "NewAttendance": attendance });
+                        let _ = sender.send(axum::extract::ws::Message::Text(msg.to_string())).await;
+                    },
+                    AttendanceEvent::AttendanceList(attendances) => {
+                        let msg = json!({ "AttendanceList": attendances });
+                        let _ = sender.send(axum::extract::ws::Message::Text(msg.to_string())).await;
+                    },
+                    AttendanceEvent::Error(error) => {
+                        let msg = json!({ "Error": error });
+                        let _ = sender.send(axum::extract::ws::Message::Text(msg.to_string())).await;
                     }
                 }
             }
@@ -179,97 +190,53 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     };
 
     let receiver_task = {
+        let client_id_clone = client_id.clone(); // Clone before moving into the async block
         let ws_state = state.ws_state.clone();
         let db_accessor = state.db_accessor.clone();
-        let client_id = client_id.clone();
         
         tokio::spawn(async move {
             while let Some(Ok(message)) = receiver.next().await {
                 match message {
                     axum::extract::ws::Message::Text(text) => {
-                        println!("Received raw message: {}", text);
-
-                        // Parse the incoming message as a generic serde_json::Value first
+                        // Parse and handle incoming messages
                         match serde_json::from_str::<serde_json::Value>(&text) {
                             Ok(value) => {
-                                println!("Parsed message value: {:?}", value);
+                                let msg_type = value.get("type").and_then(|v| v.as_str());
+                                let data = value.get("data");
 
-                                // Extract type and data manually
-                                if let (Some(msg_type), Some(data)) = 
-                                    (value.get("type"), value.get("data")) 
-                                {
-                                    println!("Message Type: {}", msg_type);
-
-                                    match msg_type.as_str().unwrap_or("") {
-                                        "AttendanceList" => {
-                                            println!("📋 Received AttendanceList request from client {}", client_id);
-                                            match get_all_attendances(db_accessor.clone()).await {
-                                                Ok(attendances) => {
-                                                    println!("📊 Total attendances fetched: {}", attendances.len());
+                                match (msg_type, data) {
+                                    (Some("AttendanceList"), _) => {
+                                        // Fetch and broadcast all attendances
+                                        if let Ok(attendances) = get_all_attendances(db_accessor.clone()).await {
+                                            let _ = ws_state.sender_tx.send((
+                                                client_id_clone.clone(), 
+                                                AttendanceEvent::AttendanceList(attendances)
+                                            )).await;
+                                        }
+                                    },
+                                    (Some("NewAttendance"), Some(data)) => {
+                                        // Create new attendance and broadcast
+                                        if let Ok(attendance_req) = serde_json::from_value::<CreateAttendanceRequest>(data.clone()) {
+                                            match create_attendance(db_accessor.clone(), attendance_req.clone()).await {
+                                                Ok(_created_attendance) => {
                                                     let _ = ws_state.sender_tx.send((
-                                                        client_id.clone(),
-                                                        AttendanceEvent::AttendanceList(attendances)
+                                                        client_id_clone.clone(),
+                                                        AttendanceEvent::NewAttendance(attendance_req)
                                                     )).await;
                                                 },
                                                 Err(e) => {
-                                                    println!("❌ Error in AttendanceList request: {:?}", e);
                                                     let _ = ws_state.sender_tx.send((
-                                                        client_id.clone(),
+                                                        client_id_clone.clone(),
                                                         AttendanceEvent::Error(e)
                                                     )).await;
                                                 }
                                             }
-                                        },
-                                        "NewAttendance" => {
-                                            // Handle new attendance if needed
-                                            if let Ok(attendance_req) = 
-                                                serde_json::from_value::<CreateAttendanceRequest>(data.clone()) 
-                                            {
-                                                match create_attendance(db_accessor.clone(), attendance_req.clone()).await {
-                                                    Ok(_) => {
-                                                        let _ = ws_state.sender_tx.send((
-                                                            client_id.clone(),
-                                                            AttendanceEvent::NewAttendance(attendance_req)
-                                                        )).await;
-                                                    },
-                                                    Err(e) => {
-                                                        let _ = ws_state.sender_tx.send((
-                                                            client_id.clone(),
-                                                            AttendanceEvent::Error(e)
-                                                        )).await;
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        _ => {
-                                            println!("Unknown message type");
-                                            let _ = ws_state.sender_tx.send((
-                                                client_id.clone(),
-                                                AttendanceEvent::Error(WebSocketError::InvalidMessageFormat(
-                                                    "Unknown message type".to_string()
-                                                ))
-                                            )).await;
                                         }
-                                    }
-                                } else {
-                                    println!("Invalid message format");
-                                    let _ = ws_state.sender_tx.send((
-                                        client_id.clone(),
-                                        AttendanceEvent::Error(WebSocketError::InvalidMessageFormat(
-                                            "Missing type or data".to_string()
-                                        ))
-                                    )).await;
+                                    },
+                                    _ => {}
                                 }
                             },
-                            Err(e) => {
-                                println!("Deserialization error: {:?}", e);
-                                let _ = ws_state.sender_tx.send((
-                                    client_id.clone(),
-                                    AttendanceEvent::Error(WebSocketError::InvalidMessageFormat(
-                                        format!("Parsing error: {}", e)
-                                    ))
-                                )).await;
-                            }
+                            Err(_) => {}
                         }
                     },
                     axum::extract::ws::Message::Close(_) => break,
@@ -284,6 +251,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         _ = receiver_task => {},
     }
 
+    // Use a clone here as well
     let mut connections = state.ws_state.connections.lock().await;
     connections.remove(&client_id);
 }

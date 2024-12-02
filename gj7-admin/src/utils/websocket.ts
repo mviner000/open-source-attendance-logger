@@ -28,7 +28,7 @@ export interface WebSocketMessage {
   data: CreateAttendanceRequest | Attendance[] | string;
 }
 
-export const useAttendanceWebSocket = (onMessageCallback?: (message: WebSocketMessage) => void) => {
+export const useAttendanceWebSocket = () => {
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -37,125 +37,85 @@ export const useAttendanceWebSocket = (onMessageCallback?: (message: WebSocketMe
     const newSocket = new WebSocket('ws://localhost:8080/ws');
 
     newSocket.onopen = () => {
-      console.log('✅ WebSocket Connected Successfully');
-      console.log('Connection Details:', {
-        url: newSocket.url,
-        protocol: newSocket.protocol,
-        readyState: newSocket.readyState
-      });
+      console.log('WebSocket Connected');
       setIsConnected(true);
       
-      console.log('Sending AttendanceList request');
+      // Request initial attendance list
       newSocket.send(JSON.stringify({ 
-        type: 'AttendanceList',
-        data: {} // Explicitly send an empty data object
+        type: 'AttendanceList', 
+        data: {} 
       }));
     };
 
-    newSocket.onclose = (event) => {
-      console.log('❌ WebSocket Disconnected', {
-        wasClean: event.wasClean,
-        code: event.code,
-        reason: event.reason
-      });
-      setIsConnected(false);
-    };
-
     newSocket.onmessage = (event) => {
-      console.log('Raw WebSocket message received:', event.data);
-      
       try {
-        const rawMessage = JSON.parse(event.data);
+        const data = JSON.parse(event.data);
         
-        // Check if the message has an AttendanceList key
-        if (rawMessage.AttendanceList && Array.isArray(rawMessage.AttendanceList)) {
-          console.log('Attendance List Received:', rawMessage.AttendanceList);
-          
-          // Update attendances state with the received list
-          setAttendances(rawMessage.AttendanceList);
+        if (data.AttendanceList) {
+          // Ensure time_in_date is a valid ISO string and classification is not undefined
+          const processedAttendances = data.AttendanceList.map((attendance: Attendance) => ({
+            ...attendance,
+            time_in_date: attendance.time_in_date 
+              ? (typeof attendance.time_in_date === 'string' 
+                  ? attendance.time_in_date 
+                  : new Date(attendance.time_in_date).toISOString())
+              : new Date().toISOString(),
+            classification: attendance.classification || 'N/A'
+          }));
 
-          const message: WebSocketMessage = {
-            type: AttendanceEventType.AttendanceList,
-            data: rawMessage.AttendanceList
+          setAttendances(processedAttendances);
+        } else if (data.NewAttendance) {
+          // Process new attendance
+          const processedAttendance = {
+            ...data.NewAttendance,
+            time_in_date: data.NewAttendance.time_in_date 
+              ? (typeof data.NewAttendance.time_in_date === 'string' 
+                  ? data.NewAttendance.time_in_date 
+                  : new Date(data.NewAttendance.time_in_date).toISOString())
+              : new Date().toISOString(),
+            classification: data.NewAttendance.classification || 'N/A'
           };
 
-          onMessageCallback?.(message);
-        } 
-        // Handle new attendance
-        else if (rawMessage.NewAttendance) {
-          console.log('New Attendance Received:', rawMessage.NewAttendance);
-          
-          const newAttendance = {
-            ...rawMessage.NewAttendance,
-            // Ensure time_in_date exists and is a valid ISO string
-            time_in_date: rawMessage.NewAttendance.time_in_date || new Date().toISOString()
-          };
-          
-          // Update attendances state by adding the new attendance
-          setAttendances(prevAttendances => {
-            // Check if the attendance already exists to avoid duplicates
-            const exists = prevAttendances.some(att => att.id === newAttendance.id);
+          // Add new attendance in real-time
+          setAttendances(prev => {
+            // Prevent duplicates
+            const exists = prev.some(a => a.id === processedAttendance.id);
             return exists 
-              ? prevAttendances 
-              : [...prevAttendances, newAttendance];
+              ? prev 
+              : [processedAttendance, ...prev];
           });
-
-          const message: WebSocketMessage = {
-            type: AttendanceEventType.NewAttendance,
-            data: newAttendance
-          };
-
-          onMessageCallback?.(message);
-        }
-        // Handle errors
-        else if (rawMessage.Error) {
-          console.error('WebSocket Error:', rawMessage.Error);
-          
-          const message: WebSocketMessage = {
-            type: AttendanceEventType.Error,
-            data: rawMessage.Error
-          };
-
-          onMessageCallback?.(message);
-        }
-        // Fallback for unexpected message formats
-        else {
-          console.warn('Unexpected WebSocket message format:', rawMessage);
         }
       } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
+        console.error('WebSocket message error:', error);
       }
     };
 
-    newSocket.onerror = (error) => {
-      console.error('WebSocket Error:', error);
+    newSocket.onclose = () => {
+      setIsConnected(false);
+      console.log('WebSocket Disconnected');
     };
 
     setSocket(newSocket);
-
-    return () => {
-      newSocket.close();
-    };
-  }, [onMessageCallback]);
+    return newSocket;
+  }, []);
 
   useEffect(() => {
-    const cleanup = connectWebSocket();
-    return cleanup;
+    const ws = connectWebSocket();
+    return () => ws.close();
   }, [connectWebSocket]);
 
-  const sendAttendance = (attendance: CreateAttendanceRequest) => {
+  const sendAttendance = useCallback((attendance: CreateAttendanceRequest) => {
     if (socket && isConnected) {
       socket.send(JSON.stringify({
         type: 'NewAttendance',
         data: attendance
       }));
     }
-  };
+  }, [socket, isConnected]);
 
-  return {
-    attendances,
-    isConnected,
-    sendAttendance,
- connectWebSocket
+  return { 
+    attendances, 
+    isConnected, 
+    sendAttendance 
   };
 };
