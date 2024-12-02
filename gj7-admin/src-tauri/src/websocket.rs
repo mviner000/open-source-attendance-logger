@@ -14,6 +14,7 @@ use tokio::sync::{mpsc, Mutex};
 use std::{collections::HashMap, sync::Arc, path::PathBuf};
 use serde::{Serialize, Deserialize};
 use rusqlite::Connection;
+use serde_json;
 
 use crate::db::attendance::{
     Attendance,
@@ -105,19 +106,46 @@ async fn create_attendance(
 }
 
 async fn get_all_attendances(
-    db_accessor: DatabaseAccessor,  // Take ownership instead of reference
+    db_accessor: DatabaseAccessor,
 ) -> Result<Vec<Attendance>, WebSocketError> {
-    tokio::task::spawn_blocking(move || {
+    println!("🔍 Attempting to fetch all attendance records");
+    
+    let result = tokio::task::spawn_blocking(move || {
         let conn = db_accessor.get_connection()
             .map_err(|e| WebSocketError::DatabaseError(e.to_string()))?;
         
         let repo = SqliteAttendanceRepository;
-        repo.get_all_attendances(&conn)
-            .map_err(|e| WebSocketError::DatabaseError(e.to_string()))
+        let attendances = repo.get_all_attendances(&conn)
+            .map_err(|e| WebSocketError::DatabaseError(e.to_string()))?;
+        
+        println!("✅ Fetched {} attendance records", attendances.len());
+        Ok(attendances)
     })
     .await
-    .map_err(|e| WebSocketError::DatabaseError(e.to_string()))?
+    .map_err(|e| WebSocketError::DatabaseError(e.to_string()))?;
+
+    match &result {
+        Ok(attendances) => {
+            println!("🧾 Attendance Records:");
+            for (index, attendance) in attendances.iter().enumerate() {
+                println!(
+                    "Record {}: ID={}, Name={}, School ID={}, Time={}",
+                    index + 1, 
+                    attendance.id, 
+                    attendance.full_name, 
+                    attendance.school_id, 
+                    attendance.time_in_date
+                );
+            }
+        },
+        Err(e) => {
+            println!("❌ Error fetching attendance records: {:?}", e);
+        }
+    }
+
+    result
 }
+
 
 #[axum::debug_handler]
 pub async fn websocket_handler(
@@ -152,55 +180,96 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
     let receiver_task = {
         let ws_state = state.ws_state.clone();
-        let db_accessor = state.db_accessor.clone();  // Clone here
+        let db_accessor = state.db_accessor.clone();
         let client_id = client_id.clone();
         
         tokio::spawn(async move {
             while let Some(Ok(message)) = receiver.next().await {
                 match message {
                     axum::extract::ws::Message::Text(text) => {
-                        match serde_json::from_str(&text) {
-                            Ok(AttendanceEvent::NewAttendance(attendance_req)) => {
-                                match create_attendance(db_accessor.clone(), attendance_req.clone()).await {
-                                    Ok(_) => {
-                                        let _ = ws_state.sender_tx.send((
-                                            client_id.clone(),
-                                            AttendanceEvent::NewAttendance(attendance_req)
-                                        )).await;
-                                    },
-                                    Err(e) => {
-                                        let _ = ws_state.sender_tx.send((
-                                            client_id.clone(),
-                                            AttendanceEvent::Error(e)
-                                        )).await;
+                        println!("Received raw message: {}", text);
+
+                        // Parse the incoming message as a generic serde_json::Value first
+                        match serde_json::from_str::<serde_json::Value>(&text) {
+                            Ok(value) => {
+                                println!("Parsed message value: {:?}", value);
+
+                                // Extract type and data manually
+                                if let (Some(msg_type), Some(data)) = 
+                                    (value.get("type"), value.get("data")) 
+                                {
+                                    println!("Message Type: {}", msg_type);
+
+                                    match msg_type.as_str().unwrap_or("") {
+                                        "AttendanceList" => {
+                                            println!("📋 Received AttendanceList request from client {}", client_id);
+                                            match get_all_attendances(db_accessor.clone()).await {
+                                                Ok(attendances) => {
+                                                    println!("📊 Total attendances fetched: {}", attendances.len());
+                                                    let _ = ws_state.sender_tx.send((
+                                                        client_id.clone(),
+                                                        AttendanceEvent::AttendanceList(attendances)
+                                                    )).await;
+                                                },
+                                                Err(e) => {
+                                                    println!("❌ Error in AttendanceList request: {:?}", e);
+                                                    let _ = ws_state.sender_tx.send((
+                                                        client_id.clone(),
+                                                        AttendanceEvent::Error(e)
+                                                    )).await;
+                                                }
+                                            }
+                                        },
+                                        "NewAttendance" => {
+                                            // Handle new attendance if needed
+                                            if let Ok(attendance_req) = 
+                                                serde_json::from_value::<CreateAttendanceRequest>(data.clone()) 
+                                            {
+                                                match create_attendance(db_accessor.clone(), attendance_req.clone()).await {
+                                                    Ok(_) => {
+                                                        let _ = ws_state.sender_tx.send((
+                                                            client_id.clone(),
+                                                            AttendanceEvent::NewAttendance(attendance_req)
+                                                        )).await;
+                                                    },
+                                                    Err(e) => {
+                                                        let _ = ws_state.sender_tx.send((
+                                                            client_id.clone(),
+                                                            AttendanceEvent::Error(e)
+                                                        )).await;
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        _ => {
+                                            println!("Unknown message type");
+                                            let _ = ws_state.sender_tx.send((
+                                                client_id.clone(),
+                                                AttendanceEvent::Error(WebSocketError::InvalidMessageFormat(
+                                                    "Unknown message type".to_string()
+                                                ))
+                                            )).await;
+                                        }
                                     }
+                                } else {
+                                    println!("Invalid message format");
+                                    let _ = ws_state.sender_tx.send((
+                                        client_id.clone(),
+                                        AttendanceEvent::Error(WebSocketError::InvalidMessageFormat(
+                                            "Missing type or data".to_string()
+                                        ))
+                                    )).await;
                                 }
                             },
-                            Ok(AttendanceEvent::AttendanceList(_)) => {
-                                match get_all_attendances(db_accessor.clone()).await {
-                                    Ok(attendances) => {
-                                        let _ = ws_state.sender_tx.send((
-                                            client_id.clone(),
-                                            AttendanceEvent::AttendanceList(attendances)
-                                        )).await;
-                                    },
-                                    Err(e) => {
-                                        let _ = ws_state.sender_tx.send((
-                                            client_id.clone(),
-                                            AttendanceEvent::Error(e)
-                                        )).await;
-                                    }
-                                }
-                            },
-                            Err(_) => {
+                            Err(e) => {
+                                println!("Deserialization error: {:?}", e);
                                 let _ = ws_state.sender_tx.send((
                                     client_id.clone(),
                                     AttendanceEvent::Error(WebSocketError::InvalidMessageFormat(
-                                        "Invalid message format".to_string()
+                                        format!("Parsing error: {}", e)
                                     ))
                                 )).await;
-                            },
-                            _ => {}
+                            }
                         }
                     },
                     axum::extract::ws::Message::Close(_) => break,

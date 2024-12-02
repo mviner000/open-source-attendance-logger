@@ -55,6 +55,18 @@ const Navbar: React.FC = () => {
               >
                 Attendance
               </Link>
+              <Link 
+                to="/attendance/create" 
+                className="border-transparent text-gray-300 hover:border-gray-100 hover:text-gray-100 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-bold"
+              >
+                Attendance Create
+              </Link>
+              <Link 
+                to="/attendance/view" 
+                className="border-transparent text-gray-300 hover:border-gray-100 hover:text-gray-100 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-bold"
+              >
+                Attendance View
+              </Link>
             </div>
           </div>
           <div className="flex items-center text-gray-100">
