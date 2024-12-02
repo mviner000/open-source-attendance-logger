@@ -1,6 +1,4 @@
-// src/InputScanner.tsx
-
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Attendance, CreateAttendanceRequest } from "@/types/attendance";
 import { SchoolIdLookupResponse } from "@/types/school_accounts";
 import axios from "axios";
@@ -12,7 +10,6 @@ import Step4QuoteOfTheDay from "./steps/Step4QuoteOfTheDay";
 import { useToast } from "@/hooks/use-toast";
 import { DURATIONS } from "./steps/config/durations";
 import { ServerConfigModal } from "./ServerConfigModal";
-import { useAttendanceWebSocket } from "@/utils/websocket";
 
 const InputScanner = () => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -22,16 +19,11 @@ const InputScanner = () => {
   const [inputVal, setInputVal] = useState(""); 
   const { toast } = useToast();
   const [serverIp, setServerIp] = useState('');
-  const { sendAttendance, isConnected } = useAttendanceWebSocket();
 
   useEffect(() => {
     const savedIp = localStorage.getItem('app_server_ip') || '';
     setServerIp(savedIp);
   }, []);
-
-  useEffect(() => {
-    console.log('WebSocket Connection Status:', isConnected);
-  }, [isConnected]);
 
   const fetchStudentDetails = async (schoolId: string) => {
     if (!serverIp) {
@@ -45,6 +37,7 @@ const InputScanner = () => {
 
     try {
       setInputVal(schoolId);
+
       console.log('Fetching details for school ID:', schoolId);
       const response = await axios.get<SchoolIdLookupResponse>(
         `http://${serverIp}/school_id/${schoolId}`
@@ -73,7 +66,7 @@ const InputScanner = () => {
           
           toast({
             title: "Error",
-            description: error.response.data?.message || "Student ID not found",
+            description: error.response.data?.message || "Failed to fetch student details",
             variant: "destructive"
           });
         }
@@ -113,13 +106,22 @@ const InputScanner = () => {
       const dataToSend: CreateAttendanceRequest = {
         school_id: inputVal,
         full_name: accountInfo.full_name,
-        purpose_label: purposeLabel || undefined, 
+        purpose_label: purposeLabel,
       };
       
-      // Send via WebSocket
-      sendAttendance(dataToSend);
+      console.log('Request Payload:', JSON.stringify(dataToSend, null, 2));
       
-      // Wait for server processing time
+      const response = await axios.post<Attendance>(
+        `http://${serverIp}/attendance`,
+        dataToSend
+      );
+      
+      console.log('Attendance Response:', JSON.stringify(response.data, null, 2));
+      
+      setResponseData(response.data);
+      
+      console.log('Attendance Classification:', response.data.classification);
+      
       setCurrentStep(4);
       
       setTimeout(() => {
@@ -135,11 +137,18 @@ const InputScanner = () => {
     } catch (error) {
       console.error("Error creating attendance:", error);
   
-      toast({
-        title: "Attendance Error",
-        description: "Failed to create attendance",
-        variant: "destructive"
-      });
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          console.error("Server Error Details:", JSON.stringify(error.response.data, null, 2));
+          console.error("Error Status:", error.response.status);
+          
+          toast({
+            title: "Attendance Error",
+            description: error.response.data?.message || "Failed to create attendance",
+            variant: "destructive"
+          });
+        }
+      }
     } finally {
       setIsSubmitting(false);
       console.groupEnd();

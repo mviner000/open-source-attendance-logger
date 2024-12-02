@@ -5,6 +5,7 @@ import "./App.css";
 import Splashscreen from "./SplashScreen";
 import Navbar from "./components/Navbar";
 import HomePage from './components/homepage/HomePage';
+import AttendanceCreator from './components/realtime/AttendanceCreator';
 
 // Create a wrapper component to conditionally render Navbar
 const AppContent = () => {
@@ -18,6 +19,7 @@ const AppContent = () => {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/splashscreen" element={<Splashscreen />} />
+          <Route path="/attendance/create" element={<AttendanceCreator />} />
         </Routes>
       </div>
     </div>
