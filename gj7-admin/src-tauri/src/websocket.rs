@@ -114,16 +114,18 @@ async fn create_attendance(
     db_accessor: DatabaseAccessor,
     attendance_req: CreateAttendanceRequest,
 ) -> Result<Attendance, WebSocketError> {
-    tokio::task::spawn_blocking(move || {
+    let result = tokio::task::spawn_blocking(move || {
         let conn = db_accessor.get_connection()
             .map_err(|e| WebSocketError::DatabaseError(e.to_string()))?;
         
         let repo = SqliteAttendanceRepository;
-        repo.create_attendance(&conn, attendance_req)
+        repo.create_attendance(&conn, attendance_req.clone())
             .map_err(|e| WebSocketError::DatabaseError(e.to_string()))
     })
     .await
-    .map_err(|e| WebSocketError::DatabaseError(e.to_string()))?
+    .map_err(|e| WebSocketError::DatabaseError(e.to_string()))?;
+    
+    result
 }
 
 #[axum::debug_handler]
