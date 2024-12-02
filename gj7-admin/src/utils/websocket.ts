@@ -1,4 +1,3 @@
-// utils/websocket.ts (FULL REPLACEMENT)
 import { useState, useEffect, useCallback } from 'react';
 
 export enum AttendanceEventType {
@@ -28,13 +27,16 @@ export interface WebSocketMessage {
     data: CreateAttendanceRequest | Attendance[] | string;
 }
 
-function processAttendance(attendance: Attendance): Attendance {
+function processAttendance(attendance: Partial<Attendance>): Attendance {
     return {
-        ...attendance,
+        id: attendance.id || crypto.randomUUID(),
+        school_id: attendance.school_id || 'Unknown',
+        full_name: attendance.full_name || 'Unknown User',
         time_in_date: attendance.time_in_date 
             ? new Date(attendance.time_in_date).toISOString()
             : new Date().toISOString(),
-        classification: attendance.classification || 'N/A'
+        classification: attendance.classification || 'Unclassified',
+        purpose_label: attendance.purpose_label
     };
 }
 
@@ -56,7 +58,9 @@ export const useAttendanceWebSocket = () => {
                 const data = JSON.parse(event.data);
                 
                 if (data.AttendanceList) {
-                    const processedAttendances = data.AttendanceList.map(processAttendance);
+                    const processedAttendances = data.AttendanceList.map((attendance: Partial<Attendance>) => 
+                        processAttendance(attendance)
+                    );
                     setAttendances(processedAttendances);
                 } 
                 

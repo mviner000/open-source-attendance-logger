@@ -53,7 +53,7 @@ impl AttendanceRepository for SqliteAttendanceRepository {
             return Err(err);
         }
         
-        // Modify the query to fetch more detailed information
+        // Attempt to get additional details, but with more flexible fallback
         let (full_name, classification) = match conn.query_row(
             "SELECT 
                 COALESCE(
@@ -72,11 +72,15 @@ impl AttendanceRepository for SqliteAttendanceRepository {
                         WHEN position IS NOT NULL AND position != '' THEN 'Faculty'
                         ELSE 'Visitor'
                     END, 
-                    'Visitor'
+                    COALESCE(?2, 'Visitor')
                 ) as computed_classification
             FROM school_accounts 
-            WHERE school_id = ?2",
-            params![attendance.full_name, attendance.school_id],
+            WHERE school_id = ?3",
+            params![
+                attendance.full_name, 
+                attendance.classification.as_deref().unwrap_or("Visitor"), 
+                attendance.school_id
+            ],
             |row| {
                 let name: String = row.get(0)?;
                 let classification: String = row.get(1)?;
@@ -85,20 +89,13 @@ impl AttendanceRepository for SqliteAttendanceRepository {
         ) {
             Ok((name, class_type)) => (name, class_type),
             Err(_) => {
-                if attendance.full_name.is_empty() {
-                    let err = rusqlite::Error::InvalidParameterName("School ID not found".to_string());
-                    return Err(err);
-                }
-                
-                (attendance.full_name.clone(), "Visitor".to_string())
+                // More robust fallback
+                (
+                    attendance.full_name.clone(), 
+                    attendance.classification.clone().unwrap_or_else(|| "Visitor".to_string())
+                )
             }
         };
-        
-        // Prioritize explicitly provided classification, 
-        // otherwise use the looked-up classification
-        let final_classification = attendance.classification
-            .clone()
-            .unwrap_or_else(|| classification);
         
         let id = Uuid::new_v4();
         let time_in_date = Utc::now();
@@ -113,7 +110,7 @@ impl AttendanceRepository for SqliteAttendanceRepository {
                 attendance.school_id,
                 full_name,
                 time_in_str,
-                final_classification,
+                classification,
                 attendance.purpose_label
             ],
         )?;
@@ -123,7 +120,7 @@ impl AttendanceRepository for SqliteAttendanceRepository {
             school_id: attendance.school_id,
             full_name,
             time_in_date,
-            classification: final_classification,
+            classification,
             purpose_label: attendance.purpose_label,
         };
         
