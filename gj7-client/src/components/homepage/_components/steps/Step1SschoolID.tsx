@@ -1,6 +1,6 @@
 // _components/steps/Step1StudentID.tsx
 import React, { useEffect, useRef, useState } from "react";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/components/ui/id-input";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -18,7 +18,6 @@ type Step1StudentIDProps = {
 };
 
 const Step1StudentID: React.FC<Step1StudentIDProps> = ({
-  setCurrentStep,
   setStudentDetails,
   studentDetails,
   disabled = false,
@@ -57,14 +56,17 @@ const Step1StudentID: React.FC<Step1StudentIDProps> = ({
   };
 
   useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (!disabled && inputRef.current && document.activeElement !== inputRef.current) {
+    const handleKeyPress = (_e: KeyboardEvent) => {
+      // Check if any modal is currently open
+      const isModalOpen = document.querySelector('[data-modal-open="true"]');
+      
+      if (!disabled && !isModalOpen && inputRef.current && document.activeElement !== inputRef.current) {
         inputRef.current.focus();
       }
     };
-
+  
     document.addEventListener("keydown", handleKeyPress);
-
+  
     return () => {
       document.removeEventListener("keydown", handleKeyPress);
     };

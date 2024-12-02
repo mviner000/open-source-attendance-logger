@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Attendance, CreateAttendanceRequest } from "@/types/attendance";
 import { SchoolIdLookupResponse } from "@/types/school_accounts";
 import axios from "axios";
@@ -9,6 +9,7 @@ import Step3Confirmation from "./steps/Step3Confirmation";
 import Step4QuoteOfTheDay from "./steps/Step4QuoteOfTheDay";
 import { useToast } from "@/hooks/use-toast";
 import { DURATIONS } from "./steps/config/durations";
+import { ServerConfigModal } from "./ServerConfigModal";
 
 const InputScanner = () => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -17,14 +18,29 @@ const InputScanner = () => {
   const [responseData, setResponseData] = useState<Attendance | null>(null);
   const [inputVal, setInputVal] = useState(""); 
   const { toast } = useToast();
+  const [serverIp, setServerIp] = useState('');
+
+  useEffect(() => {
+    const savedIp = localStorage.getItem('app_server_ip') || '';
+    setServerIp(savedIp);
+  }, []);
 
   const fetchStudentDetails = async (schoolId: string) => {
+    if (!serverIp) {
+      toast({
+        title: "Server Configuration",
+        description: "Please configure server IP first",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       setInputVal(schoolId);
 
       console.log('Fetching details for school ID:', schoolId);
       const response = await axios.get<SchoolIdLookupResponse>(
-        `http://localhost:8080/school_id/${schoolId}`
+        `http://${serverIp}/school_id/${schoolId}`
       );
       
       if (response.data && response.data.full_name) {
@@ -59,6 +75,15 @@ const InputScanner = () => {
   };
 
   const handleScan = async (purposeLabel: string) => {
+    if (!serverIp) {
+      toast({
+        title: "Server Configuration",
+        description: "Please configure server IP first",
+        variant: "destructive"
+      });
+      return;
+    }
+
     console.group('Attendance Creation Debug');
     console.log('School ID:', inputVal);
     console.log('Full Name:', accountInfo?.full_name);
@@ -87,7 +112,7 @@ const InputScanner = () => {
       console.log('Request Payload:', JSON.stringify(dataToSend, null, 2));
       
       const response = await axios.post<Attendance>(
-        'http://localhost:8080/attendance',
+        `http://${serverIp}/attendance`,
         dataToSend
       );
       
@@ -97,15 +122,12 @@ const InputScanner = () => {
       
       console.log('Attendance Classification:', response.data.classification);
       
-      // Move to Quote of the Day screen
       setCurrentStep(4);
       
-      // Dynamic timeout to move to success screen and reset
       setTimeout(() => {
         setCurrentStep(3);
       }, DURATIONS.PROCESSING_SCREEN * 1000);
 
-      // Additional timeout to reset entire state
       setTimeout(() => {
         setAccountInfo(null);
         setResponseData(null);
@@ -171,6 +193,9 @@ const InputScanner = () => {
 
   return (
     <>
+      <div className="absolute top-4 right-4 z-50">
+        <ServerConfigModal />
+      </div>
       <div className="z-10 grid grid-cols-3 gap-16 px-16">
         <div className="col-span-1 flex items-center justify-center">
           <div className="flex flex-col">
