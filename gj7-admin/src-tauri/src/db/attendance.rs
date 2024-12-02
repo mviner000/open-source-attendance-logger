@@ -15,7 +15,7 @@ pub struct Attendance {
     pub purpose_label: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CreateAttendanceRequest {
     pub school_id: String,
     pub full_name: String,

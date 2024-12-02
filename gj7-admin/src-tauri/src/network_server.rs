@@ -1,3 +1,5 @@
+// src/network_server.rs
+
 use axum::{
     routing::{get, post},
     Router,
@@ -12,7 +14,15 @@ use serde::{Serialize, Deserialize};
 use tower_http::cors::CorsLayer;
 use crate::Database;
 
-// Existing structs
+// Use the DatabaseAccessor from websocket module
+use crate::websocket::{
+    websocket_handler, 
+    WebSocketState, 
+    AppState, 
+    DatabaseAccessor
+};
+
+// Existing structs remain the same
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SchoolIdLookupResponse {
     pub school_id: String,
@@ -26,37 +36,19 @@ pub struct PurposeLookup {
     pub icon_name: String,
 }
 
-
-// Use the Attendance and CreateAttendanceRequest from your db/attendance.rs
 use crate::db::attendance::{
     Attendance, 
     CreateAttendanceRequest, 
     SqliteAttendanceRepository, 
     AttendanceRepository
-
 };
 
-// DatabaseAccessor struct
-#[derive(Clone)]
-struct DatabaseAccessor {
-    db_path: std::path::PathBuf,
-}
-
-impl DatabaseAccessor {
-    fn new(db: &Database) -> Self {
-        Self {
-            db_path: db.get_db_path().clone(),
-        }
-    }
-}
-
-
-
-
 async fn create_attendance_handler(
-    State(db_accessor): State<DatabaseAccessor>,
+    State(state): State<AppState>,
     Json(attendance_req): Json<CreateAttendanceRequest>
 ) -> Result<Json<Attendance>, (StatusCode, String)> {
+    let db_accessor = state.db_accessor.clone();
+    
     // Wrap the entire handler logic in a blocking task
     let result = tokio::task::spawn_blocking(move || {
         // Open database connection
@@ -77,12 +69,11 @@ async fn create_attendance_handler(
     Ok(Json(result?))
 }
 
-
-// Original handler logic
 async fn school_id_lookup_handler(
-    State(db_accessor): State<DatabaseAccessor>,
+    State(state): State<AppState>,
     Path(school_id): Path<String>
 ) -> Result<Json<SchoolIdLookupResponse>, (StatusCode, String)> {
+    let db_accessor = state.db_accessor.clone();
     // Wrap the entire handler logic in a blocking task
     let result = tokio::task::spawn_blocking(move || {
         // Open database connection
@@ -160,14 +151,6 @@ async fn school_id_lookup_handler(
     result.map(Json)
 }
 
-// Wrapper function that explicitly handles the conversion
-async fn wrapped_school_id_lookup_handler(
-    state: State<DatabaseAccessor>, 
-    path: Path<String>
-) -> Result<Json<SchoolIdLookupResponse>, (StatusCode, String)> {
-    school_id_lookup_handler(state, path).await
-}
-
 // Network server setup
 pub async fn start_network_server(db: Database) -> Result<(), Box<dyn std::error::Error>> {
     // Configure CORS
@@ -176,15 +159,21 @@ pub async fn start_network_server(db: Database) -> Result<(), Box<dyn std::error
         .allow_methods(tower_http::cors::Any)
         .allow_headers(tower_http::cors::Any);
 
-    // Create a thread-safe database accessor
-    let db_accessor = DatabaseAccessor::new(&db);
+    // Create the database accessor using the shared struct from websocket
+    let db_accessor = DatabaseAccessor::new(db.get_db_path().clone());
 
-    // Create Axum router
+    let ws_state = WebSocketState::new();
+    let app_state = AppState {
+        ws_state,
+        db_accessor: db_accessor.clone(),
+    };
+
     let app = Router::new()
-        .route("/school_id/:school_id", get(wrapped_school_id_lookup_handler))
-        .route("/attendance", post(create_attendance_handler)) // New attendance creation endpoint
+        .route("/school_id/:school_id", get(school_id_lookup_handler))
+        .route("/attendance", post(create_attendance_handler))
+        .route("/ws", get(websocket_handler))
         .layer(cors)
-        .with_state(db_accessor);
+        .with_state(app_state);
 
     // Bind to all network interfaces
     let listener = TcpListener::bind("0.0.0.0:8080").await

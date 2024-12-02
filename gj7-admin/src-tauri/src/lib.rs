@@ -12,6 +12,7 @@ mod semester_commands;
 mod purpose_commands;
 mod attendance_commands;
 mod network_server;
+mod websocket;
 
 use tauri::Manager;
 use tauri::Emitter;
