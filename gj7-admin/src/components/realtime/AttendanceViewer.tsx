@@ -1,4 +1,4 @@
-// src/components/AttendanceViewer.tsx
+// src/components/AttendanceViewer.tsx used by admin manager
 import React, { useEffect, useMemo, useCallback } from 'react';
 import { useAttendanceWebSocket, Attendance } from '@/utils/websocket';
 import { format, parseISO, isValid } from 'date-fns';

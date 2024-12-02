@@ -162,7 +162,7 @@ pub async fn start_network_server(db: Database) -> Result<(), Box<dyn std::error
     // Create the database accessor using the shared struct from websocket
     let db_accessor = DatabaseAccessor::new(db.get_db_path().clone());
 
-    let ws_state = WebSocketState::new();
+    let ws_state = WebSocketState::new(&db_accessor);
     let app_state = AppState {
         ws_state,
         db_accessor: db_accessor.clone(),

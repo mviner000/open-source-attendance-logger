@@ -41,6 +41,7 @@ pub trait AttendanceRepository: Send {
     fn update_attendance(&self, conn: &Connection, id: Uuid, attendance: UpdateAttendanceRequest) -> Result<Attendance>;
     fn get_attendances_by_semester(&self, conn: &Connection, semester_id: Uuid) -> Result<Vec<Attendance>>;
     fn get_attendances_by_school_account(&self, conn: &Connection, school_account_id: Uuid) -> Result<Vec<Attendance>>;
+    fn get_last_n_attendances(&self, conn: &Connection, n: usize) -> Result<Vec<Attendance>, rusqlite::Error>;
 }
 
 pub struct SqliteAttendanceRepository;
@@ -155,6 +156,38 @@ impl AttendanceRepository for SqliteAttendanceRepository {
         )?;
 
         Ok(attendance)
+    }
+
+    fn get_last_n_attendances(&self, conn: &Connection, n: usize) -> Result<Vec<Attendance>, rusqlite::Error> {
+        let query = "
+            SELECT id, school_id, full_name, time_in_date, classification, purpose_label
+            FROM attendance 
+            ORDER BY time_in_date DESC 
+            LIMIT ?
+        ";
+        
+        let mut stmt = conn.prepare(query)?;
+        let attendance_iter = stmt.query_map([n], |row| {
+            let time_in_str: String = row.get(3)?;
+            let time_in_date = DateTime::parse_from_rfc3339(&time_in_str)
+                .map(|dt| dt.with_timezone(&Utc))
+                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
+                    3,
+                    rusqlite::types::Type::Text,
+                    Box::new(e)
+                ))?;
+    
+            Ok(Attendance {
+                id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
+                school_id: row.get(1)?,
+                full_name: row.get(2)?,
+                time_in_date,
+                classification: row.get(4)?,
+                purpose_label: row.get(5)?,
+            })
+        })?;
+    
+        attendance_iter.collect::<Result<Vec<Attendance>, _>>()
     }
 
     fn get_attendances_by_school_id(&self, conn: &Connection, school_id: &str) -> Result<Vec<Attendance>> {

@@ -15,7 +15,6 @@ use std::{collections::HashMap, sync::Arc, path::PathBuf};
 use serde::{Serialize, Deserialize};
 use serde_json::{json, Value};
 use rusqlite::Connection;
-use serde_json;
 
 use crate::db::attendance::{
     Attendance,
@@ -24,7 +23,6 @@ use crate::db::attendance::{
     AttendanceRepository
 };
 
-// Thread-safe database accessor
 #[derive(Clone)]
 pub struct DatabaseAccessor {
     pub db_path: PathBuf,
@@ -51,6 +49,7 @@ pub enum WebSocketError {
 pub struct WebSocketState {
     pub sender_tx: mpsc::Sender<(String, AttendanceEvent)>,
     pub connections: Arc<Mutex<HashMap<String, mpsc::Sender<AttendanceEvent>>>>,
+    pub recent_attendances: Arc<Mutex<Vec<Attendance>>>,
 }
 
 #[derive(Clone)]
@@ -67,11 +66,18 @@ pub enum AttendanceEvent {
 }
 
 impl WebSocketState {
-    pub fn new() -> Self {
+    pub fn new(db_accessor: &DatabaseAccessor) -> Self {
         let (sender_tx, mut receiver) = mpsc::channel::<(String, AttendanceEvent)>(100);
         let connections = Arc::new(Mutex::new(HashMap::<String, mpsc::Sender<AttendanceEvent>>::new()));
         
+        // Fetch initial recent attendances from database
+        let recent_attendances = Arc::new(Mutex::new(
+            get_last_n_attendances(db_accessor, 100).unwrap_or_default()
+        ));
+
         let connections_clone = connections.clone();
+        let recent_attendances_clone = recent_attendances.clone();
+
         tokio::spawn(async move {
             while let Some((exclude_client, event)) = receiver.recv().await {
                 let connections = connections_clone.lock().await;
@@ -86,12 +92,26 @@ impl WebSocketState {
         WebSocketState {
             sender_tx,
             connections,
+            recent_attendances: recent_attendances_clone,
         }
     }
 }
 
+// Helper function to get last N attendances from database
+fn get_last_n_attendances(
+    db_accessor: &DatabaseAccessor, 
+    n: usize
+) -> Result<Vec<Attendance>, WebSocketError> {
+    let conn = db_accessor.get_connection()
+        .map_err(|e| WebSocketError::DatabaseError(e.to_string()))?;
+    
+    let repo = SqliteAttendanceRepository;
+    repo.get_last_n_attendances(&conn, n)
+        .map_err(|e| WebSocketError::DatabaseError(e.to_string()))
+}
+
 async fn create_attendance(
-    db_accessor: DatabaseAccessor,  // Take ownership instead of reference
+    db_accessor: DatabaseAccessor,
     attendance_req: CreateAttendanceRequest,
 ) -> Result<Attendance, WebSocketError> {
     tokio::task::spawn_blocking(move || {
@@ -105,48 +125,6 @@ async fn create_attendance(
     .await
     .map_err(|e| WebSocketError::DatabaseError(e.to_string()))?
 }
-
-async fn get_all_attendances(
-    db_accessor: DatabaseAccessor,
-) -> Result<Vec<Attendance>, WebSocketError> {
-    println!("🔍 Attempting to fetch all attendance records");
-    
-    let result = tokio::task::spawn_blocking(move || {
-        let conn = db_accessor.get_connection()
-            .map_err(|e| WebSocketError::DatabaseError(e.to_string()))?;
-        
-        let repo = SqliteAttendanceRepository;
-        let attendances = repo.get_all_attendances(&conn)
-            .map_err(|e| WebSocketError::DatabaseError(e.to_string()))?;
-        
-        println!("✅ Fetched {} attendance records", attendances.len());
-        Ok(attendances)
-    })
-    .await
-    .map_err(|e| WebSocketError::DatabaseError(e.to_string()))?;
-
-    match &result {
-        Ok(attendances) => {
-            println!("🧾 Attendance Records:");
-            for (index, attendance) in attendances.iter().enumerate() {
-                println!(
-                    "Record {}: ID={}, Name={}, School ID={}, Time={}",
-                    index + 1, 
-                    attendance.id, 
-                    attendance.full_name, 
-                    attendance.school_id, 
-                    attendance.time_in_date
-                );
-            }
-        },
-        Err(e) => {
-            println!("❌ Error fetching attendance records: {:?}", e);
-        }
-    }
-
-    result
-}
-
 
 #[axum::debug_handler]
 pub async fn websocket_handler(
@@ -166,11 +144,19 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         connections.insert(client_id.clone(), client_tx);
     }
     
+    // Send recent attendances immediately on connection
+    {
+        let recent_attendances = state.ws_state.recent_attendances.lock().await;
+        if !recent_attendances.is_empty() {
+            let msg = json!({ "AttendanceList": *recent_attendances });
+            let _ = sender.send(axum::extract::ws::Message::Text(msg.to_string())).await;
+        }
+    }
+    
     let sender_task = {
-        let client_id_clone = client_id.clone(); // Clone before moving into the async block
+        let client_id_clone = client_id.clone();
         tokio::spawn(async move {
             while let Some(event) = client_rx.recv().await {
-                // Broadcast events to all clients
                 match event {
                     AttendanceEvent::NewAttendance(attendance) => {
                         let msg = json!({ "NewAttendance": attendance });
@@ -190,7 +176,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     };
 
     let receiver_task = {
-        let client_id_clone = client_id.clone(); // Clone before moving into the async block
+        let client_id_clone = client_id.clone();
         let ws_state = state.ws_state.clone();
         let db_accessor = state.db_accessor.clone();
         
@@ -198,27 +184,25 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
             while let Some(Ok(message)) = receiver.next().await {
                 match message {
                     axum::extract::ws::Message::Text(text) => {
-                        // Parse and handle incoming messages
                         match serde_json::from_str::<serde_json::Value>(&text) {
                             Ok(value) => {
                                 let msg_type = value.get("type").and_then(|v| v.as_str());
                                 let data = value.get("data");
 
                                 match (msg_type, data) {
-                                    (Some("AttendanceList"), _) => {
-                                        // Fetch and broadcast all attendances
-                                        if let Ok(attendances) = get_all_attendances(db_accessor.clone()).await {
-                                            let _ = ws_state.sender_tx.send((
-                                                client_id_clone.clone(), 
-                                                AttendanceEvent::AttendanceList(attendances)
-                                            )).await;
-                                        }
-                                    },
                                     (Some("NewAttendance"), Some(data)) => {
-                                        // Create new attendance and broadcast
                                         if let Ok(attendance_req) = serde_json::from_value::<CreateAttendanceRequest>(data.clone()) {
                                             match create_attendance(db_accessor.clone(), attendance_req.clone()).await {
-                                                Ok(_created_attendance) => {
+                                                Ok(created_attendance) => {
+                                                    // Update recent attendances
+                                                    {
+                                                        let mut recent_attendances = ws_state.recent_attendances.lock().await;
+                                                        recent_attendances.insert(0, created_attendance);
+                                                        if recent_attendances.len() > 100 {
+                                                            recent_attendances.pop();
+                                                        }
+                                                    }
+
                                                     let _ = ws_state.sender_tx.send((
                                                         client_id_clone.clone(),
                                                         AttendanceEvent::NewAttendance(attendance_req)
@@ -251,18 +235,17 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         _ = receiver_task => {},
     }
 
-    // Use a clone here as well
     let mut connections = state.ws_state.connections.lock().await;
     connections.remove(&client_id);
 }
 
 pub fn create_websocket_routes(db_path: PathBuf) -> Router {
-    let ws_state = WebSocketState::new();
     let db_accessor = DatabaseAccessor::new(db_path);
+    let ws_state = WebSocketState::new(&db_accessor);
     
     let app_state = AppState {
         ws_state,
-        db_accessor,
+        db_accessor: db_accessor.clone(),
     };
     
     Router::new()
