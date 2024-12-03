@@ -2,25 +2,8 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from './logger';
+import { Attendance, AttendanceWithDates } from '@/types/attendance';
 
-// Updated types to use purpose_label instead of purpose_id
-export interface Attendance {
-  id: string;  // UUID as string
-  school_id: string;
-  full_name: string;
-  time_in_date: string;  // DateTime<Utc> as string
-  classification: string;
-  purpose_label?: string;  // Changed from purpose_id
-}
-
-export interface AttendanceWithDates {
-  id: string;
-  school_id: string;
-  full_name: string;
-  time_in_date: Date;
-  classification: string;
-  purpose_label?: string;  // Changed from purpose_id
-}
 
 export interface CreateAttendanceRequest {
   school_id: string;

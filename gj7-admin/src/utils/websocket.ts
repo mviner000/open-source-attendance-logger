@@ -1,3 +1,5 @@
+// utils/websocket.ts
+
 import { useState, useEffect, useCallback } from 'react';
 
 export enum AttendanceEventType {

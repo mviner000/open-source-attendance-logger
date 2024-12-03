@@ -6,7 +6,8 @@ import Navbar from "./components/Navbar";
 import Sidebar from "./components/Sidebar";
 import AttendanceRecords from "./components/AttendanceRecords";
 import AttendanceCreator from "./components/realtime/AttendanceCreator";
-import AttendanceViewer from "./components/realtime/AttendanceViewer";
+import AttendanceRecordsRealtime from "./components/realtime/AttendanceRecordsRealtime";
+// import AttendanceViewer from "./components/realtime/AttendanceViewer";
 
 function App() {
   return (
@@ -26,7 +27,8 @@ function App() {
                     <Route path="/records" element={<AttendanceRecords />} />
                     <Route path="/attendance" element={<Attendance />} />
                     <Route path="/attendance/create" element={<AttendanceCreator />} />
-                    <Route path="/attendance/view" element={<AttendanceViewer />} />
+                    {/* <Route path="/attendance/view" element={<AttendanceViewer />} /> */}
+                    <Route path="/attendance/realtime" element={<AttendanceRecordsRealtime />} />
                   </Routes>
                 </div>
               </div>

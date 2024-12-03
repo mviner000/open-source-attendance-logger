@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf'
-import { AttendanceWithDates } from '@/lib/attendance'
+import { AttendanceWithDates } from '@/types/attendance'
 
 // Constants for PDF layout
 const PAGE_WIDTH = 330.2 // Legal Landscape width in mm (13 inches = 330.2mm)
