@@ -100,6 +100,15 @@ const InputScanner = () => {
       console.groupEnd();
       return;
     }
+
+    if (!accountInfo || !inputVal || !accountInfo.classification) {
+      toast({
+        title: "Error",
+        description: "You're data is missing. Please scan your ID again.",
+        variant: "destructive"
+      });
+      return;
+    }    
     
     setIsSubmitting(true);
     try {
@@ -107,6 +116,7 @@ const InputScanner = () => {
         school_id: inputVal,
         full_name: accountInfo.full_name,
         purpose_label: purposeLabel,
+        classification: accountInfo.classification,
       };
       
       console.log('Request Payload:', JSON.stringify(dataToSend, null, 2));

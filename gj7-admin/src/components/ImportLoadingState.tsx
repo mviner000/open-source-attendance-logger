@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react';
 
 const ImportLoadingState = () => {
   return (
-    <div className="bg-slate-50 rounded-lg p-8 space-y-6">
+    <div className="bg-slate-50 rounded-lg pt-8 pb-4 space-y-6">
       <div className="flex flex-col items-center justify-center space-y-4">
         <div className="relative w-24 h-24">
           <div className="absolute inset-0 border-4 border-blue-100 rounded-full animate-pulse"></div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { 
   Dialog, 
@@ -6,7 +6,8 @@ import {
   DialogDescription, 
   DialogHeader, 
   DialogTitle, 
-  DialogTrigger 
+  DialogTrigger,
+  DialogClose
 } from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from "@/components/ui/label";
@@ -16,34 +17,42 @@ import { LockKeyhole } from 'lucide-react';
 const SERVER_IP_KEY = 'app_server_ip';
 
 export const useServerConfig = () => {
-  const [serverIp, setServerIp] = useState('');
+  const [serverIp, setServerIp] = useState('localhost'); // Default to localhost
   const { toast } = useToast();
 
   useEffect(() => {
-    // Load saved IP from localStorage on component mount
-    const savedIp = localStorage.getItem(SERVER_IP_KEY) || '';
-    setServerIp(savedIp);
+    const savedIp = localStorage.getItem(SERVER_IP_KEY);
+    // Only update if there's a saved IP, otherwise keep 'localhost'
+    if (savedIp) {
+      setServerIp(savedIp);
+    } else {
+      // Ensure 'localhost' is set in localStorage if not already present
+      localStorage.setItem(SERVER_IP_KEY, 'localhost');
+    }
   }, []);
 
   const saveServerIp = (ip: string) => {
-    // Enhanced validation to accept localhost and IP addresses with optional port
-    const ipRegex = /^(localhost|(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}))(:\d+)?$/;
-    if (!ipRegex.test(ip)) {
+    // Trim whitespace
+    const trimmedIp = ip.trim();
+
+    // Allow 'localhost' or valid IP address
+    const ipRegex = /^(localhost|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/;
+    if (!ipRegex.test(trimmedIp)) {
       toast({
         title: "Invalid IP Address",
-        description: "Please enter a valid IP address or localhost (optional port)",
+        description: "Please enter a valid IP address or localhost",
         variant: "destructive"
       });
       return false;
     }
 
     // Save to localStorage
-    localStorage.setItem(SERVER_IP_KEY, ip);
-    setServerIp(ip);
+    localStorage.setItem(SERVER_IP_KEY, trimmedIp);
+    setServerIp(trimmedIp);
     
     toast({
       title: "Server Configuration",
-      description: `Server IP set to ${ip}`,
+      description: `Server IP set to ${trimmedIp}`,
       variant: "default"
     });
     return true;
@@ -55,19 +64,32 @@ export const useServerConfig = () => {
 export const ServerConfigModal = () => {
   const [inputIp, setInputIp] = useState('');
   const { serverIp, saveServerIp } = useServerConfig();
+  const [isOpen, setIsOpen] = useState(false);
   
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     if (saveServerIp(inputIp)) {
-      // Close dialog logic would go here if using controlled dialog
+      setIsOpen(false);
     }
-  };
+  }, [inputIp, saveServerIp]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+    }
+  }, [handleSave]);
+
+  useEffect(() => {
+    setInputIp(serverIp);
+  }, [serverIp, isOpen]);
 
   return (
-    <Dialog>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" className='text-black'><LockKeyhole />Configure LAN</Button>
       </DialogTrigger>
-      <DialogContent data-modal-open="true">
+      <DialogContent data-modal-open="true" onKeyDown={handleKeyDown}>
         <DialogHeader>
           <DialogTitle>Server Configuration</DialogTitle>
           <DialogDescription>
@@ -81,17 +103,22 @@ export const ServerConfigModal = () => {
             </Label>
             <Input
               id="serverIp"
-              placeholder="e.g., localhost:8080 or 127.0.0.1:8080"
+              placeholder="e.g., localhost or 192.168.1.100"
               className="col-span-3"
               value={inputIp}
               onChange={(e) => setInputIp(e.target.value)}
             />
           </div>
           <div className="text-sm text-muted-foreground">
-            Current saved IP: {serverIp || 'Not set'}
+            Current saved IP: {serverIp}
           </div>
         </div>
         <div className="flex justify-end">
+          <DialogClose asChild>
+            <Button type="button" variant="secondary" className="mr-2">
+              Cancel
+            </Button>
+          </DialogClose>
           <Button type="button" onClick={handleSave}>
             Save Configuration
           </Button>

@@ -6,6 +6,7 @@ import Navbar from "./components/Navbar";
 import Sidebar from "./components/Sidebar";
 import AttendanceRecords from "./components/AttendanceRecords";
 import AttendanceRecordsRealtime from "./components/realtime/AttendanceRecordsRealtime";
+import AccountsStatsWithImportCSV from "./components/AccountsStatsWithImportCSV";
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
             <div className="bg-[#123e1e] rounded-r-2xl sm:rounded-2xl h-[calc(100vh-124px)] overflow-hidden lg:px-6">
               <div className="sm:ml-0 h-full">
                 <div className="h-full overflow-y-auto">
+                  <AccountsStatsWithImportCSV />
                   <Routes>
                     <Route path="/" element={<SchoolAccounts />} />
                     <Route path="/records" element={<AttendanceRecords />} />

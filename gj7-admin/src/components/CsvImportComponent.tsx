@@ -160,6 +160,8 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
     if (existingAccountCount > 0) {
       setShowUpdateConfirmation(true);
     } else {
+
+      setIsShowingImportLoadingState(true);
       importFile(false);
     }
   };
@@ -217,12 +219,15 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
           <div className="flex space-x-4">
             <Button
               onClick={handleFileSelect} 
+              size="lg"
               variant="outline" 
               className="flex-grow border-green-500 hover:bg-green-50"
               disabled={isFileImported || !!existingAccountInfo || showStatistics}
             >
-              <FileUp className="w-4 h-4 mr-2" />
-              {displayFileName ? `Selected: ${displayFileName}` : 'Select CSV File'}
+              <FileUp className="w-4 h-4" />
+              <span className='mt-1'>
+                {displayFileName ? `Selected: ${displayFileName}` : 'Select CSV File'}
+              </span>
             </Button>
           </div>
 
@@ -243,7 +248,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </div>
           )}
 
-          {validationResult?.is_valid && showImportSection && (
+          {validationResult?.is_valid && showImportSection && !isShowingImportLoadingState && !showStatistics && (
             <>
               <div className="space-y-2">
               <SemesterSelection 

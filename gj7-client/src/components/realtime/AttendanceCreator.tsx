@@ -1,28 +1,14 @@
 // src/components/AttendanceCreator.tsx used by client
-import React, { useState, useMemo } from 'react';
-import { useAttendanceWebSocket, CreateAttendanceRequest, Attendance } from '@/utils/websocket';
-import { format, parseISO, isValid } from 'date-fns';
-
+import React, { useState } from 'react';
+import { useAttendanceWebSocket } from '@/utils/websocket';
+import { CreateAttendanceRequest } from '@/types/attendance';
 const AttendanceCreator: React.FC = () => {
   const [schoolId, setSchoolId] = useState('');
   const [fullName, setFullName] = useState('');
   const [classification, setClassification] = useState('');
   const [purposeLabel, setPurposeLabel] = useState('');
 
-  const { sendAttendance, isConnected, attendances } = useAttendanceWebSocket();
-
-  // Memoized date formatter
-  const formatDate = (dateString: string) => {
-    try {
-      const parsedDate = parseISO(dateString);
-      return isValid(parsedDate) 
-        ? format(parsedDate, 'yyyy-MM-dd HH:mm:ss')
-        : 'Invalid Date';
-    } catch (error) {
-      console.error('Date parsing error:', error);
-      return 'Invalid Date';
-    }
-  };
+  const { sendAttendance, isConnected } = useAttendanceWebSocket();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +16,7 @@ const AttendanceCreator: React.FC = () => {
     const attendanceData: CreateAttendanceRequest = {
       school_id: schoolId,
       full_name: fullName,
-      classification: classification || undefined,
+      classification: classification,
       purpose_label: purposeLabel || undefined
     };
 
@@ -42,13 +28,6 @@ const AttendanceCreator: React.FC = () => {
     setClassification('');
     setPurposeLabel('');
   };
-
-  // Memoized sorted attendances
-  const sortedAttendances = useMemo(() => {
-    return [...attendances].sort((a, b) => 
-      new Date(b.time_in_date).getTime() - new Date(a.time_in_date).getTime()
-    );
-  }, [attendances]);
 
   return (
     <div className="z-50 max-w-2xl mx-auto space-y-6">

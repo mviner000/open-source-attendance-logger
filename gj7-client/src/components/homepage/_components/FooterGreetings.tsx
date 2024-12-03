@@ -52,10 +52,10 @@ const FooterGreetings = ({
 
     if (currentStep === 1) {
       return (
-        <div className="lg:ml-20 md:ml-56 w-full">
+        <div className="lg:ml-20 md:ml-56 w-full md:text-4xl lg:text-5xl xl:text-6xl">
           <TypingText
             text="Please input ID or scan QR" 
-            className=" text-6xl font-extrabold drop-shadow"
+            className="font-extrabold drop-shadow"
           />
         </div>
       );
@@ -82,7 +82,7 @@ const FooterGreetings = ({
         </Gradient>
       </p>
 
-      <div className="-ml-48 w-4/5 text-6xl font-extrabold drop-shadow">
+      <div className="-ml-48 w-4/5 lg:text-6xl md:text-5xl font-extrabold drop-shadow">
         {renderMessage()}
       </div>
     </div>

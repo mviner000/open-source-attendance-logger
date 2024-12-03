@@ -8,7 +8,7 @@ import CsvImportComponent from './CsvImportComponent';
 import { SemesterModal } from './semester-modal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2, RefreshCw, Search } from 'lucide-react';
 import { SearchModal } from './search-modal';
 import { PurposeModal } from './purpose-modal';
 
@@ -139,54 +139,6 @@ const SchoolAccountsPage: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Import Accounts</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CsvImportComponent onImportSuccess={handleImportSuccess} />
-                </CardContent>
-              </Card>
-              <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center w-full">
-                <CardTitle>Account Statistics</CardTitle>
-                <div className="text-right flex items-center">
-                  <p className="text-sm font-medium">Total: <span className='font-bold'>{activeCount + inactiveCount}</span></p>
-                </div>
-              </div>
-            </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-medium">Active Accounts</p>
-                    <p className="text-2xl font-bold">{activeCount}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">Inactive Accounts</p>
-                    <p className="text-2xl font-bold">{inactiveCount}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-              {/* <Card>
-              <CardHeader>
-                <CardTitle>Manage Semesters</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <SemesterModal onUpdate={handleSemesterUpdate} />
-              </CardContent>
-            </Card> */}
-            <Card className='hidden'>
-              <CardHeader>
-                <CardTitle>Manage Purposes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <PurposeModal onUpdate={fetchSchoolAccountsAndSemesters} />
-              </CardContent>
-            </Card>
-            </div>
             <Card>
               <CardHeader>
                 <CardTitle>Filter Accounts</CardTitle>
@@ -248,10 +200,25 @@ const SchoolAccountsPage: React.FC = () => {
             <Card>
             <CardHeader>
               <div className="flex justify-between items-center w-full">
+                <div className='flex items-center gap-2'>
                 <CardTitle>School Accounts</CardTitle>
+                  <Button 
+                    onClick={fetchSchoolAccountsAndSemesters} 
+                    variant="outline" 
+                    className='border border-black'
+                    disabled={loading}
+                  >
+                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                    <span className='mt-1'>
+                      Refresh
+                    </span>
+                  </Button>
+                </div>
                 <Button onClick={() => setIsSearchModalOpen(true)}>
-                  <Search className="mr-2 h-4 w-4" />
-                  Search
+                  <Search className="h-4 w-4" />
+                  <span className='mt-1'>
+                    Search
+                  </span>
                 </Button>
               </div>
             </CardHeader>

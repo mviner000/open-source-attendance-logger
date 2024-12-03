@@ -1,6 +1,6 @@
 // src/InputScanner.tsx
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Attendance, CreateAttendanceRequest } from "@/types/attendance";
 import { SchoolIdLookupResponse } from "@/types/school_accounts";
 import axios from "axios";
@@ -34,22 +34,15 @@ const InputScanner = () => {
   }, [isConnected]);
 
   const fetchStudentDetails = async (schoolId: string) => {
-    if (!serverIp) {
-      toast({
-        title: "Server Configuration",
-        description: "Please configure server IP first",
-        variant: "destructive"
-      });
-      return;
-    }
-
     try {
       setInputVal(schoolId);
       console.log('Fetching details for school ID:', schoolId);
-      const response = await axios.get<SchoolIdLookupResponse>(
-        `http://${serverIp}/school_id/${schoolId}`
-      );
       
+      // Use the serverIp state here
+      const response = await axios.get<SchoolIdLookupResponse>(
+        `http://${serverIp}:8080/school_id/${schoolId}`
+      );
+  
       if (response.data && response.data.full_name) {
         setAccountInfo(response.data);
         setCurrentStep(2);
@@ -62,38 +55,21 @@ const InputScanner = () => {
         });
       }
     } catch (error) {
-      console.error("Invalid ID:", error);
-      
-      setInputVal("");
-      
-      if (axios.isAxiosError(error)) {
-        if (error.response) {
-          console.error('Error response:', error.response.data);
-          console.error('Error status:', error.response.status);
-          
-          toast({
-            title: "Error",
-            description: error.response.data?.message || "Student ID not found",
-            variant: "destructive"
-          });
-        }
-      }
-    }
-  };
-
-  const handleScan = async (purposeLabel: string) => {
-    if (!serverIp) {
+      console.error('Error fetching student details:', error);
       toast({
-        title: "Server Configuration",
-        description: "Please configure server IP first",
+        title: "Error",
+        description: "Failed to fetch student information",
         variant: "destructive"
       });
-      return;
     }
+  };  
+
+  const handleScan = async (purposeLabel: string) => {
 
     console.group('Attendance Creation Debug');
     console.log('School ID:', inputVal);
     console.log('Full Name:', accountInfo?.full_name);
+    console.log('Classification:', accountInfo?.classification);
     console.log('Purpose Label:', purposeLabel);
     console.log('Complete School Info:', JSON.stringify(accountInfo, null, 2));
   
@@ -113,13 +89,13 @@ const InputScanner = () => {
       const dataToSend: CreateAttendanceRequest = {
         school_id: inputVal,
         full_name: accountInfo.full_name,
-        purpose_label: purposeLabel || undefined, 
+        classification: accountInfo.classification, // Added this field
+        purpose_label: purposeLabel || undefined,
       };
       
       // Send via WebSocket
       sendAttendance(dataToSend);
       
-      // Wait for server processing time
       setCurrentStep(4);
       
       setTimeout(() => {
@@ -145,6 +121,7 @@ const InputScanner = () => {
       console.groupEnd();
     }
   };
+
 
   const QRCodeSection = () => (
     <div className="relative size-[316px] flex items-center justify-center">

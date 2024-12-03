@@ -65,12 +65,6 @@ const Navbar: React.FC = () => {
               </h1>
             </div>
           </Link>
-          <Link 
-            to="/attendance/create" 
-            className="border-transparent text-gray-300 hover:border-gray-100 hover:text-gray-100 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-bold"
-          >
-            Attendance Create
-          </Link>
         </div>
       </div>
     </nav>

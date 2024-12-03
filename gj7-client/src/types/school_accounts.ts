@@ -14,6 +14,7 @@ export interface SchoolAccount {
 export interface SchoolIdLookupResponse {
   school_id: string;
   full_name: string;
+  classification: string;
   purposes: {
     [key: string]: {
       label: string;
