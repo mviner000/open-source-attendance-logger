@@ -17,7 +17,6 @@ const FooterGreetings = ({
   studentDetails,
   currentStep,
   setCurrentStep,
-  responseData,
 }: Props) => {
   const [militaryTime, setMilitaryTime] = useState<boolean>(false);
 
@@ -26,18 +25,6 @@ const FooterGreetings = ({
   }, []);
 
   const renderMessage = () => {
-    if (currentStep === 4 && responseData) {
-      return (
-        <div className="h-[180px] w-4/6 ml-20">
-          <TimedMessage
-            message="Processing... Wait to finish loading..."
-            duration={DURATIONS.PROCESSING_SCREEN}
-            setCurrentStep={setCurrentStep}
-          />
-        </div>
-      );
-    }
-
     if (currentStep === 3) {
       return (
         <div className="h-[180px] w-5/6 ml-20">
@@ -49,18 +36,30 @@ const FooterGreetings = ({
         </div>
       );
     }
-
-    if (currentStep === 1) {
+  
+    if (currentStep === 4) {
       return (
-        <div className="lg:ml-20 md:ml-56 w-full md:text-4xl lg:text-5xl xl:text-6xl">
-          <TypingText
-            text="Please input ID or scan QR" 
-            className="font-extrabold drop-shadow"
+        <div className="h-[180px] w-4/6 ml-20">
+          <TimedMessage
+            message="Processing... Wait to finish loading..."
+            duration={DURATIONS.PROCESSING_SCREEN}
+            setCurrentStep={setCurrentStep}
           />
         </div>
       );
     }
-
+  
+    if (currentStep === 1) {
+      return (
+        <div className="lg:ml-20 md:ml-56 w-full">
+          <TypingText
+            text="Please input ID or scan QR" 
+            className="text-6xl font-extrabold drop-shadow"
+          />
+        </div>
+      );
+    }
+  
     if (currentStep === 2 && studentDetails) {
       return (
         <div className="lg:ml-20 md:ml-56 -mr-2 w-full">
@@ -68,12 +67,12 @@ const FooterGreetings = ({
         </div>
       );
     }
-
+  
     return null;
   };
 
   return (
-    <div className="mt-20 flex w-full items-center gap-16 bg-gradient-to-r from-[#035A19] to-[#E0A000]/75 px-16 py-6 font-oswald">
+    <div className="mt-5 flex w-full items-center gap-16 bg-gradient-to-r from-[#035A19] to-[#E0A000]/75 px-16 py-6 font-oswald">
       <p className="font-bold drop-shadow lg:w-1/2 md:w-4/5">
         <Gradient>
           <Suspense fallback={<span>Loading...</span>}>

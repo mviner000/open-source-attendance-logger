@@ -1,13 +1,13 @@
 // components/attendance/AttendanceList.tsx
 
 import React, { useState, useEffect } from 'react'
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { CreateAttendanceRequest } from '@/lib/attendance'
 import { Purpose, PurposeApi } from '@/lib/purpose'
 import PurposeCard from '@/components/purpose/PurposeCard'
+import { PurposeModal } from '../purpose-modal'
 
 interface CreateAttendanceFormProps {
   onCreateAttendance: (attendance: CreateAttendanceRequest) => Promise<void>
@@ -71,10 +71,7 @@ const CreateAttendanceForm: React.FC<CreateAttendanceFormProps> = ({ onCreateAtt
   }
 
   return (
-    <Card className="mb-6">
-      {/* <CardHeader>
-        <CardTitle>Create Attendance</CardTitle>
-      </CardHeader> */}
+    <Card className="pb-2">
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
           <Input
@@ -87,13 +84,13 @@ const CreateAttendanceForm: React.FC<CreateAttendanceFormProps> = ({ onCreateAtt
           />
           
           <div>
-            <h3 className="text-sm font-medium mb-2">Purposes</h3>
+            <PurposeModal onUpdate={() => window.location.reload()} />
             {loading ? (
               <p>Loading purposes...</p>
             ) : purposes.length === 0 ? (
               <p className="text-muted-foreground">No purposes available</p>
             ) : (
-              <ScrollArea className="h-[200px] w-full">
+              <ScrollArea className="w-full mt-5">
                 <div className="grid grid-cols-3 gap-4 pr-4">
                   {purposes.map((purpose) => (
                     <PurposeCard
@@ -113,14 +110,6 @@ const CreateAttendanceForm: React.FC<CreateAttendanceFormProps> = ({ onCreateAtt
             )}
           </div>
         </CardContent>
-        <CardFooter className="flex justify-end items-end hidden">
-            <Button 
-                type="submit" 
-                disabled={!schoolId || !selectedPurpose}
-            >
-                Create Attendance
-            </Button>
-        </CardFooter>
       </form>
     </Card>
   )

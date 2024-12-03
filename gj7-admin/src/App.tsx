@@ -24,9 +24,9 @@ function App() {
                   <AccountsStatsWithImportCSV />
                   <Routes>
                     <Route path="/" element={<SchoolAccounts />} />
-                    <Route path="/records" element={<AttendanceRecords />} />
-                    <Route path="/attendance" element={<Attendance />} />
                     <Route path="/attendance/realtime" element={<AttendanceRecordsRealtime />} />
+                    <Route path="/attendance" element={<Attendance />} />
+                    <Route path="/records" element={<AttendanceRecords />} />
                   </Routes>
                 </div>
               </div>

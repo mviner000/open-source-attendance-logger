@@ -107,7 +107,7 @@ const InputScanner = () => {
         setResponseData(null);
         setInputVal(""); 
         setCurrentStep(1);
-      }, (DURATIONS.PROCESSING_SCREEN + DURATIONS.SUCCESS_SCREEN - 2) * 1000);
+      }, (DURATIONS.PROCESSING_SCREEN + DURATIONS.SUCCESS_SCREEN) * 1000);
     } catch (error) {
       console.error("Error creating attendance:", error);
   
@@ -138,7 +138,7 @@ const InputScanner = () => {
   );
 
   const renderStep2Content = () => (
-    <div className="col-span-2 flex items-center justify-center">
+    <div className="col-span-2 flex -ml-40 w-full">
       <Step2ChoosePurpose
         handleScan={handleScan}
         isSubmitting={isSubmitting}

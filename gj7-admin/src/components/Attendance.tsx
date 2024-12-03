@@ -4,10 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { AttendanceApi, CreateAttendanceRequest } from '../lib/attendance'
 import { logger, LogLevel } from '../lib/logger'
 import { ToastProvider, ToastViewport } from "@/components/ui/toast"
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast'
 import CreateAttendanceForm from './attendance/CreateAttendanceForm'
-import { PurposeModal } from './purpose-modal';
 
 const Attendance: React.FC = () => {
   // States
@@ -68,17 +66,6 @@ const Attendance: React.FC = () => {
         )}
         <CreateAttendanceForm onCreateAttendance={createAttendance} />
       </div>
-
-      <div className="p-4 max-w-4xl mx-auto">
-        <Card>
-          <CardHeader>
-              <CardTitle>Manage Purposes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PurposeModal onUpdate={() => window.location.reload()} />
-            </CardContent>
-        </Card>
-        </div>
       <ToastViewport />
     </ToastProvider>
   )

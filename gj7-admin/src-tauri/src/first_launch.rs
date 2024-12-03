@@ -4,8 +4,45 @@ use log::info;
 use rusqlite::Connection;
 use tauri::AppHandle;
 use crate::db::auth::{AuthDatabase, Credentials as AuthCredentials};
+use crate::db::purpose::{PurposeRepository, SqlitePurposeRepository, CreatePurposeRequest};
 use crate::config;
 use crate::storage::AppStorage;
+
+fn create_initial_purposes(conn: &Connection) -> Result<(), String> {
+    let purpose_repo = SqlitePurposeRepository;
+    
+    let initial_purposes = vec![
+        CreatePurposeRequest { label: "Research".to_string(), icon_name: "folder-search".to_string() },
+        CreatePurposeRequest { label: "Clearance".to_string(), icon_name: "notebook-pen".to_string() },
+        CreatePurposeRequest { label: "Meeting".to_string(), icon_name: "podcast".to_string() },
+        CreatePurposeRequest { label: "Transaction".to_string(), icon_name: "hand-coins".to_string() },
+        CreatePurposeRequest { label: "SilverStar".to_string(), icon_name: "sparkles".to_string() },
+        CreatePurposeRequest { label: "Reading/Study/Review".to_string(), icon_name: "bookmark".to_string() },
+        CreatePurposeRequest { label: "Xerox".to_string(), icon_name: "file-stack".to_string() },
+        CreatePurposeRequest { label: "Print".to_string(), icon_name: "printer".to_string() },
+        CreatePurposeRequest { label: "ComputerUse".to_string(), icon_name: "computer".to_string() },
+    ];
+
+    for purpose_req in initial_purposes {
+        // Check if purpose already exists before creating
+        match purpose_repo.get_purpose_by_label(conn, &purpose_req.label) {
+            Ok(_) => {
+                info!("Purpose '{}' already exists, skipping", purpose_req.label);
+                continue;
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                // Purpose doesn't exist, so create it
+                purpose_repo.create_purpose(conn, purpose_req.clone())
+                    .map_err(|e| format!("Failed to create purpose {}: {}", purpose_req.label, e))?;
+                info!("Created initial purpose: {}", purpose_req.label);
+            }
+            Err(e) => return Err(format!("Error checking purpose existence: {}", e)),
+        }
+    }
+
+    Ok(())
+}
+
 
 pub fn handle_first_launch(_app_handle: &AppHandle) -> Result<(), String> {
     info!("Checking for first launch configuration...");
@@ -41,6 +78,10 @@ pub fn handle_first_launch(_app_handle: &AppHandle) -> Result<(), String> {
     // Initialize auth database
     let auth_db = AuthDatabase::init(&conn)
         .map_err(|e| format!("Failed to initialize auth database: {}", e))?;
+
+    // Create purposes table BEFORE trying to create initial purposes
+    crate::db::purpose::create_purposes_table(&conn)
+        .map_err(|e| format!("Failed to create purposes table: {}", e))?;
     
     // Create initial user if not exists
     if !auth_db.user_exists(&conn)? {
@@ -52,6 +93,9 @@ pub fn handle_first_launch(_app_handle: &AppHandle) -> Result<(), String> {
         
         auth_db.create_user(&conn, &auth_credentials)?;
     }
+
+    // Create initial purposes
+    create_initial_purposes(&conn)?;
     
     // Delete config file
     let config_path = storage.get_config_file_path();

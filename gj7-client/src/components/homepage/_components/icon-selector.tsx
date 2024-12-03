@@ -1,3 +1,5 @@
+// find it in here
+
 import { 
   Star,
   Activity,
@@ -126,7 +128,14 @@ import {
   Youtube,
   Zap,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  FolderSearch,
+  NotebookPen,
+  Podcast,
+  HandCoins,
+  Sparkles,
+  Computer,
+  FileStack
 } from 'lucide-react'
 
 // Create an array of available icons
@@ -258,7 +267,14 @@ export const AVAILABLE_ICONS = [
   { name: 'youtube', icon: Youtube },
   { name: 'zap', icon: Zap },
   { name: 'zoom-in', icon: ZoomIn },
-  { name: 'zoom-out', icon: ZoomOut }
+  { name: 'zoom-out', icon: ZoomOut },
+  { name: 'folder-search', icon: FolderSearch },
+  { name: 'notebook-pen', icon: NotebookPen },
+  { name: 'podcast', icon: Podcast },
+  { name: 'hand-coins', icon: HandCoins },
+  { name: 'sparkles', icon: Sparkles },
+  { name: 'computer', icon: Computer },
+  { name: 'file-stack', icon: FileStack }
 ];
 
 // Utility function to get icon by name

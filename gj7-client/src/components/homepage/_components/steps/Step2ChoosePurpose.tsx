@@ -1,7 +1,7 @@
-// _components/steps/Step2ChoosePurpose.tsx
-
+import * as Icons from 'lucide-react';
+import { LucideIcon } from 'lucide-react';
 import { Button } from "@/components/ui/button";
-import { Book } from "lucide-react"; // Fallback icon
+import { cn } from '@/lib/utils';
 
 type Step2ChoosePurposeProps = {
   handleScan: (purpose: string) => void;
@@ -14,43 +14,43 @@ type Step2ChoosePurposeProps = {
   };
 };
 
-// Import the AVAILABLE_ICONS from IconSelector to map icon names
-import { AVAILABLE_ICONS } from "../icon-selector";
+const normalizeIconName = (iconName: string): string => {
+  const cleanName = iconName.split('->').pop() || iconName;
+  return cleanName
+    .split(/[-\s]+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join('');
+};
 
 const Step2ChoosePurpose: React.FC<Step2ChoosePurposeProps> = ({
   handleScan,
   isSubmitting,
   availablePurposes
 }) => {
-  // Helper function to find the correct icon
-  const getIconComponent = (iconName: string) => {
-    const foundIcon = AVAILABLE_ICONS.find(icon => icon.name === iconName);
-    return foundIcon ? foundIcon.icon : Book; // Fallback to Book icon if not found
-  };
-
   return (
-    <div className="grid grid-cols-3 items-center justify-between gap-4 md:ml-28 lg:ml-64">
+    <div className="mt-3 grid grid-cols-3 items-center justify-between gap-1 md:ml-28 lg:ml-64">
       {Object.entries(availablePurposes).map(([key, purpose]) => {
-        const IconComponent = getIconComponent(purpose.icon_name);
+        const normalizedIconName = normalizeIconName(purpose.icon_name);
+        const Icon: LucideIcon = (Icons[normalizedIconName as keyof typeof Icons] as LucideIcon) || Icons.HelpCircle;
         
         return (
-          <Button
+          <div
             key={key}
-            disabled={isSubmitting}
             onClick={() => handleScan(key)}
-            variant="ghost"
-            className="flex h-full cursor-pointer flex-col items-center gap-2 rounded-xl p-4 hover:bg-customGold"
+            className="flex h-full cursor-pointer flex-col items-center gap-2 rounded-xl p-4 hover:bg-customGold/90"
           >
-            <div className="flex size-[100px] items-center justify-center rounded-lg border border-customGreen2 bg-white">
-              <IconComponent 
-                className="size-12 text-customGreen" 
-                strokeWidth={1.5}
-              />
+            <div className=" flex h-32 w-32 items-center justify-center rounded-lg border border-customGreen2 bg-white/90 p-2">
+              <div className='relative'>
+              <span className='absolute -right-[2px] top-0'><Icon className="w-12 h-12 text-pink-500/70" /></span>
+              <span className='absolute -left-[1px] bottom-1'><Icon className="w-12 h-12 text-gray-700" /></span>
+              <span className='absolute -left-[2px] bottom-1'><Icon className="w-12 h-12 text-orange-500/30" /></span>
+              <Icon className="w-12 h-12 text-green-500" />
+              </div>
             </div>
-            <p className="min-w-[150px] rounded-lg border border-customGreen2 bg-white p-1 text-center text-xl font-semibold text-customGreen">
+            <p className="mt-1 min-w-[150px] rounded-lg border border-customGold/90 shadow-lg bg-customGreen2 p-1 text-center text-xl font-extrabold text-white">
               {purpose.label}
             </p>
-          </Button>
+          </div>
         );
       })}
     </div>
