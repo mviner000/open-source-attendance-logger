@@ -28,6 +28,7 @@ pub struct SchoolIdLookupResponse {
     pub school_id: String,
     pub full_name: String,
     pub purposes: HashMap<String, PurposeLookup>,
+    pub classification: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -82,8 +83,8 @@ async fn school_id_lookup_handler(
             Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
         };
 
-        // Look up full name
-        let full_name = match conn.query_row(
+        // Updated query to include classification logic
+        let (full_name, classification) = match conn.query_row(
             "SELECT 
                 COALESCE(
                     CASE 
@@ -94,17 +95,22 @@ async fn school_id_lookup_handler(
                         ELSE first_name
                     END, 
                     school_id
-                ) as full_name
+                ) as full_name,
+                CASE 
+                    WHEN course IS NOT NULL AND course != '' THEN course
+                    WHEN position IS NOT NULL AND position != '' THEN 'Faculty'
+                    ELSE 'Visitor'
+                END as classification
             FROM school_accounts 
             WHERE school_id = ?1",
             params![school_id],
-            |row| row.get::<_, String>(0)
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         ) {
-            Ok(name) => name,
+            Ok((name, class)) => (name, class),
             Err(_) => return Err((StatusCode::NOT_FOUND, "School ID not found".to_string())),
         };
 
-        // Prepare purposes statement
+        // Prepare purposes statement (unchanged)
         let mut purposes_stmt = match conn.prepare(
             "SELECT label, icon_name FROM purposes WHERE is_deleted = FALSE"
         ) {
@@ -112,7 +118,7 @@ async fn school_id_lookup_handler(
             Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
         };
 
-        // Fetch purposes
+        // Fetch purposes (unchanged)
         let purposes_iter = match purposes_stmt.query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -126,7 +132,7 @@ async fn school_id_lookup_handler(
             Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
         };
 
-        // Convert purposes to HashMap
+        // Convert purposes to HashMap (unchanged)
         let mut purposes = HashMap::new();
         for purpose in purposes_iter {
             match purpose {
@@ -137,11 +143,12 @@ async fn school_id_lookup_handler(
             }
         }
 
-        // Construct and return the response
+        // Updated response construction to include classification
         Ok(SchoolIdLookupResponse {
             school_id,
             full_name,
             purposes,
+            classification,  // Added this field
         })
     })
     .await

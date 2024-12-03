@@ -53,8 +53,8 @@ impl AttendanceRepository for SqliteAttendanceRepository {
             return Err(err);
         }
         
-        // Attempt to get additional details, but with more flexible fallback
-        let (full_name, classification) = match conn.query_row(
+        // Only get the full name from database if not provided
+        let full_name = match conn.query_row(
             "SELECT 
                 COALESCE(
                     CASE 
@@ -65,41 +65,25 @@ impl AttendanceRepository for SqliteAttendanceRepository {
                         ELSE first_name
                     END, 
                     ?1
-                ) as computed_full_name,
-                COALESCE(
-                    CASE 
-                        WHEN course IS NOT NULL AND course != '' THEN course
-                        WHEN position IS NOT NULL AND position != '' THEN 'Faculty'
-                        ELSE 'Visitor'
-                    END, 
-                    COALESCE(?2, 'Visitor')
-                ) as computed_classification
+                ) as computed_full_name
             FROM school_accounts 
-            WHERE school_id = ?3",
+            WHERE school_id = ?2",
             params![
                 attendance.full_name, 
-                attendance.classification.as_deref().unwrap_or("Visitor"), 
                 attendance.school_id
             ],
-            |row| {
-                let name: String = row.get(0)?;
-                let classification: String = row.get(1)?;
-                Ok((name, classification))
-            }
+            |row| row.get::<_, String>(0)
         ) {
-            Ok((name, class_type)) => (name, class_type),
-            Err(_) => {
-                // More robust fallback
-                (
-                    attendance.full_name.clone(), 
-                    attendance.classification.clone().unwrap_or_else(|| "Visitor".to_string())
-                )
-            }
+            Ok(name) => name,
+            Err(_) => attendance.full_name.clone()
         };
         
         let id = Uuid::new_v4();
         let time_in_date = Utc::now();
         let time_in_str = time_in_date.to_rfc3339();
+        
+        // Use the classification provided by the frontend, with "Visitor" as fallback
+        let classification = attendance.classification.unwrap_or_else(|| "Visitor".to_string());
         
         conn.execute(
             "INSERT INTO attendance (
