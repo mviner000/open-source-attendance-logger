@@ -53,19 +53,13 @@ const Navbar: React.FC = () => {
                 to="/attendance" 
                 className="border-transparent text-gray-300 hover:border-gray-100 hover:text-gray-100 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-bold"
               >
-                Attendance
-              </Link>
-              <Link 
-                to="/attendance/create" 
-                className="border-transparent text-gray-300 hover:border-gray-100 hover:text-gray-100 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-bold"
-              >
-                Attendance Create
+                Purpose Manager
               </Link>
               <Link 
                 to="/attendance/realtime" 
                 className="border-transparent text-gray-300 hover:border-gray-100 hover:text-gray-100 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-bold"
               >
-                Attendance Realtime
+                Statistics Records
               </Link>
             </div>
           </div>

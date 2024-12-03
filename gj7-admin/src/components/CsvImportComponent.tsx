@@ -3,31 +3,18 @@
 import React, { useState, useEffect } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { CsvImportApi, CsvValidationResult, CsvImportResponse } from '../lib/csv_import';
-import { SemesterApi, Semester } from '../lib/semester';
+import { Semester } from '../lib/semester';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { FileSpreadsheet, AlertCircle, CheckCircle, FileUp, ClipboardCheck, Upload, Check, SquareLibrary, MoveRight } from 'lucide-react';
 import { CsvHeaderValidationErrors } from './CsvHeaderValidationErrors';
 import CsvContentValidationErrors from './CsvContentValidationErrors';
 import { SchoolAccount } from '@/lib/school_accounts';
 import ImportLoadingState from './ImportLoadingState';
+import SemesterSelection from './SemesterSelection'; // Import the new component
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 
 interface CsvImportComponentProps {
   onImportSuccess: () => void;
@@ -56,7 +43,6 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
   const [importResult, setImportResult] = useState<CsvImportResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showUpdateConfirmation, setShowUpdateConfirmation] = useState(false);
-  const [semesters, setSemesters] = useState<Semester[]>([]);
   const [selectedSemester, setSelectedSemester] = useState<Semester | null>(null);
   const [showStatistics, setShowStatistics] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
@@ -65,23 +51,8 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
   const [isFileImported, setIsFileImported] = useState(false);
   const [isShowingImportLoadingState, setIsShowingImportLoadingState] = useState(false);
 
-  useEffect(() => {
-    const fetchSemesters = async () => {
-      try {
-        const fetchedSemesters = await SemesterApi.getAllSemesters();
-        setSemesters(fetchedSemesters);
-      } catch (err) {
-        setError('Failed to fetch semesters');
-        console.error(err);
-      }
-    };
-
-    fetchSemesters();
-  }, []);
-
   const handleFileSelect = async () => {
     try {
-      // Disable the button if any of these conditions are true
       if (isFileImported || existingAccountInfo || showStatistics) {
         return;
       }
@@ -116,6 +87,10 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
     setShowExistingAccountInfo(true);
     setShowImportSection(true);
     setIsFileImported(false);
+  };
+
+  const handleSemesterSelect = (semester: Semester) => {
+    setSelectedSemester(semester);
   };
 
   const validateFile = async () => {
@@ -153,7 +128,6 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
     setShowUpdateConfirmation(false);
 
     try {
-      // If it's a forced update, show the loading state
       if (forceUpdate) {
         setIsShowingImportLoadingState(true);
       }
@@ -164,7 +138,6 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
         force_update: forceUpdate
       });
       
-      // Hide loading state after import is complete
       setIsShowingImportLoadingState(false);
       
       setImportResult(result);
@@ -174,7 +147,6 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
 
       return result;
     } catch (err) {
-      // Hide loading state in case of error
       setIsShowingImportLoadingState(false);
       setError(err instanceof Error ? err.message : 'Import failed');
     } finally {
@@ -204,27 +176,28 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
         <ImportLoadingState />
       ) : (
         <>
-      <CardHeader>
-        <div className="flex justify-between items-center w-full">
-          <div className="flex items-center">
-            <FileSpreadsheet className="mr-2" />
-            <CardTitle>CSV Import</CardTitle>
-          </div>
-          {shouldShowCancelButton && (
-            <Button 
-              variant="outline" 
-              className="border-red-500 text-red-500 hover:bg-red-50"
-              onClick={() => {
-                resetState();
-              }}
-            >
-              Cancel
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-      </>
-    )}
+          <CardHeader>
+            <div className="flex justify-between items-center w-full">
+              <div className="flex items-center">
+                <FileSpreadsheet className="mr-2" />
+                <CardTitle>CSV Import</CardTitle>
+              </div>
+              {shouldShowCancelButton && (
+                <Button 
+                  variant="outline" 
+                  className="border-red-500 text-red-500 hover:bg-red-50"
+                  onClick={() => {
+                    resetState();
+                  }}
+                >
+                  Cancel
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+        </>
+      )}
+
       {currentStep > 0 && !isShowingImportLoadingState && (
         <div className="px-6 py-2">
           <Progress value={(currentStep / steps.length) * 100} className="w-full" />
@@ -238,6 +211,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
           </div>
         </div>
       )}
+
       <CardContent>
         <div className="space-y-4">
           <div className="flex space-x-4">
@@ -269,95 +243,29 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </div>
           )}
 
-          {existingAccountInfo && showExistingAccountInfo && 
-          validationResult && 
-          !validationResult.validation_errors.some(err => err.row_number === 0) && (
-            <Alert variant="default" className="border-green-500 pb-4">
-              <div className="flex items-center space-x-2 mb-1">
-                <SquareLibrary className="h-6 w-6 text-green-600" />
-                <AlertTitle className="text-2xl font-black text-green-600 mt-3">Validated CSV File</AlertTitle>
-              </div>
-              <AlertDescription className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-green-50 rounded-lg p-4 border border-green-100">
-                    <div className="text-base text-green-600 font-bold mb-1">New Accounts</div>
-                    <div className='py-3 mt-2'>
-                      <span className="text-4xl font-bold text-white py-4 px-2 pb-1.5 bg-green-500 rounded-md">
-                        {existingAccountInfo.new_accounts_count}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-500 italic">To be created</div>
-                  </div>
-                  
-                  <div className="bg-green-50 rounded-lg p-4 border border-green-100">
-                    <div className="text-base text-green-700 font-bold mb-1 underline underline-offset-1">Existing Accounts!</div>
-                    <div className='py-3 mt-2'>
-                      <span className="text-4xl font-bold text-white py-4 px-2 pb-1.5 bg-green-500 rounded-md">
-                        {existingAccountInfo.existing_accounts_count}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-500 italic">To be updated</div>
-                  </div>
-                </div>
-
-                {existingAccountInfo.existing_accounts.length > 0 && (
-                  <div className="mt-4 bg-green-50 rounded-lg p-4 border border-green-200">
-                    <p className="text-sm font-semibold text-green-700 mb-2">Accounts to be updated:</p>
-                    <ul className="space-y-1">
-                      {existingAccountInfo.existing_accounts.slice(0, 5).map((account, index) => (
-                        <li key={index} className="text-sm text-gray-600 flex items-center">
-                          <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
-                          <span className="font-medium">{account.school_id}</span>
-                          <span className="mx-2">-</span>
-                          <span>{account.first_name} {account.last_name}</span>
-                        </li>
-                      ))}
-                      {existingAccountInfo.existing_accounts.length > 5 && (
-                        <li className="text-xs text-gray-500 italic mt-2 pl-4">
-                          ... and {existingAccountInfo.existing_accounts.length - 5} more accounts
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                )}
-              </AlertDescription>
-            </Alert>
-          )}
-
           {validationResult?.is_valid && showImportSection && (
             <>
               <div className="space-y-2">
-                <Select 
-                  value={selectedSemester?.id} 
-                  onValueChange={(selectedId) => {
-                    const semester = semesters.find(s => s.id === selectedId);
-                    setSelectedSemester(semester || null);
-                  }}
-                >
-                  <SelectTrigger className="bg-black text-slate-200">
-                    <SelectValue placeholder="Select Semester" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {semesters.map(semester => (
-                      <SelectItem key={semester.id} value={semester.id}>
-                        {semester.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <SemesterSelection 
+                  onSemesterSelect={handleSemesterSelect}
+                />
               </div>
 
               {selectedSemester && (
+               <div className="flex justify-end items-center">
                 <Button 
                   onClick={handleImportClick} 
                   disabled={isImporting}
                   variant="default"
-                  className="w-full"
+                  className="flex items-center justify-center gap-2 pl-4 border border-yellow-500 pr-5 py-3 text-white font-semibold transition duration-200 ease-in-out bg-green-600 hover:bg-green-900 active:scale-95"
                 >
-                  <Upload className="w-4 h-4 mr-2" />
+                  <Upload className="w-4 h-4" />
+                  <span className='mt-1'>
                   {isImporting ? 'Importing...' : 'Import File'}
+                  </span>
                 </Button>
-              )}
+              </div>
+            )}
             </>
           )}
 
@@ -374,7 +282,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
 
           {showStatistics && importResult && importResult.account_status_counts && (
             <Alert variant="default" className="bg-green-50 border-green-300 p-4">
-              <div className="flex items-center space-x-4 mb-4">
+              <div className="flex items-center space-x-2 mb-4">
                 <CheckCircle className="h-10 w-10 text-green-600" />
                 <AlertTitle className="text-2xl font-bold text-green-800 mt-2">Import Successful</AlertTitle>
               </div>
@@ -383,28 +291,28 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
                   {importResult.existing_account_info && (
                     <div className="grid grid-cols-3 gap-3 text-sm">
                       <div className="bg-blue-100 p-3 rounded-lg">
-                        <p className="text-xs text-gray-600 uppercase tracking-wider mb-1">New Accounts</p>
-                        <p className="text-lg font-bold text-blue-800">{importResult.existing_account_info.new_accounts_count}</p>
+                        <p className="text-xs text-gray-600 uppercase tracking-wider mb-1">New Created Accounts</p>
+                        <p className="text-2xl font-bold text-blue-800">{importResult.existing_account_info.new_accounts_count}</p>
                       </div>
                       <div className="bg-yellow-100 p-3 rounded-lg">
                         <p className="text-xs text-gray-600 uppercase tracking-wider mb-1">Updated Accounts</p>
-                        <p className="text-lg font-bold text-yellow-800">{importResult.existing_account_info.existing_accounts_count}</p>
+                        <p className="text-2xl font-bold text-yellow-800">{importResult.existing_account_info.existing_accounts_count}</p>
                       </div>
                       <div className="bg-purple-100 p-3 rounded-lg">
                         <p className="text-xs text-gray-600 uppercase tracking-wider mb-1">Total in Database</p>
-                        <p className="text-lg font-bold text-purple-800">{importResult.account_status_counts.total_accounts}</p>
+                        <p className="text-2xl font-bold text-purple-800">{importResult.account_status_counts.total_accounts}</p>
                       </div>
                     </div>
                   )}
 
                   <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="bg-green-200 p-3 rounded-lg">
-                      <p className="text-xs text-gray-600 uppercase tracking-wider mb-1">Activated Accounts</p>
-                      <p className="text-lg font-bold text-green-900">{importResult.account_status_counts.activated_accounts}</p>
+                    <div className="bg-green-200 px-3 pt-3 border border-green-900 pb-0 rounded-lg">
+                      <p className="text-xs text-gray-600 uppercase tracking-wider font-bold">Active Accounts</p>
+                      <p className="text-4xl font-extrabold text-green-900">{importResult.account_status_counts.activated_accounts}</p>
                     </div>
-                    <div className="bg-red-200 p-3 rounded-lg">
-                      <p className="text-xs text-gray-600 uppercase tracking-wider mb-1">Deactivated Accounts</p>
-                      <p className="text-lg font-bold text-red-900">{importResult.account_status_counts.deactivated_accounts}</p>
+                    <div className="bg-red-200 px-3 pt-3 border border-red-900 pb-0 rounded-lg">
+                      <p className="text-xs text-gray-600 uppercase tracking-wider font-bold">Inactive Accounts</p>
+                      <p className="text-4xl font-extrabold  text-red-900">{importResult.account_status_counts.deactivated_accounts}</p>
                     </div>
                   </div>
                 </div>
@@ -467,40 +375,52 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
           )}
 
           {currentStep === 3 && importResult && importResult.failed_imports === 0 && (
-            <Button 
+            <Button
+              size="lg"
               onClick={handleFinish}
-              variant="default"
-              className="w-full"
+              className="w-full bg-green-700"
             >
-              <Check className="w-4 h-4 mr-2" />
-              Finish
+              <Check className="w-4 h-4" />
+              <span className='mt-1 -ml-1'>Finish</span>
             </Button>
           )}
 
           <Dialog open={showUpdateConfirmation} onOpenChange={setShowUpdateConfirmation}>
-            <DialogContent>
+            <DialogContent className="bg-white shadow-2xl border-2 border-green-100">
               <DialogHeader>
-                <DialogTitle>Confirm Update</DialogTitle>
-                <DialogDescription className="space-y-2">
-                  <p>You are about to:</p>
-                  <ul className="list-disc list-inside">
-                    <li>Update {existingAccountInfo?.existing_accounts_count} existing accounts</li>
-                    <li>Create {existingAccountInfo?.new_accounts_count} new accounts</li>
-                  </ul>
-                  <p className="font-semibold text-red-500">This action cannot be undone.</p>
-                  <p>Do you want to continue?</p>
+                <DialogTitle className="text-2xl font-bold text-green-800 flex items-center">
+                  Confirm Account Update
+                </DialogTitle>
+                <DialogDescription className="space-y-4 text-gray-700">
+                  <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
+                    <ul className="list-disc list-inside text-yellow-900 space-y-1">
+                      <li className="flex items-center">
+                        - Update <span className="font-bold mx-1 text-green-700 text-2xl">{existingAccountInfo?.existing_accounts_count}</span> <span className='underline underline-offset-2 italic'>existing accounts</span>
+                      </li>
+                      <li className="flex items-center">
+                        - Create <span className="font-bold mx-1 text-green-700 text-2xl">{existingAccountInfo?.new_accounts_count}</span> new accounts
+                      </li>
+                    </ul>
+                  </div>
+                  <div className="bg-red-50 border border-red-200 p-3 rounded-lg">
+                    <p className="font-bold text-red-700 flex items-center">
+                      <AlertCircle className="w-5 h-5 mr-2" />
+                      Warning: This action <span className="mx-1 uppercase text-red-900">cannot be undone</span>
+                    </p>
+                  </div>
+                  <p className="text-gray-600 italic">Are you sure you want to proceed with this update?</p>
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter className="flex space-x-2">
                 <Button
                   variant="outline"
                   onClick={() => setShowUpdateConfirmation(false)}
-                  className="border-green-500 hover:bg-green-50"
+                  className="border-gray-300 text-gray-700 hover:bg-gray-100"
                 >
                   Cancel
                 </Button>
                 <Button
-                  variant="default"
+                  className='bg-green-600 hover:bg-green-700 flex items-center'
                   onClick={async () => {
                     setShowExistingAccountInfo(false);
                     setShowImportSection(false);
@@ -511,7 +431,8 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
                     }
                   }}
                 >
-                  Continue with Update
+                  <Check className="w-4 h-4" />
+                  <span className='mt-1 -ml-1'>Continue with Update</span>
                 </Button>
               </DialogFooter>
             </DialogContent>

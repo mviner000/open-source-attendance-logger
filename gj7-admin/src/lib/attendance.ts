@@ -2,7 +2,17 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from './logger';
-import { Attendance, AttendanceWithDates } from '@/types/attendance';
+import { Attendance } from '@/types/attendance';
+
+
+export interface AttendanceWithDates {
+  id: string;
+  school_id: string;
+  full_name: string;
+  time_in_date: Date;
+  classification: string;
+  purpose_label?: string;  // Changed from purpose_id
+}
 
 
 export interface CreateAttendanceRequest {

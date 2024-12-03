@@ -1,7 +1,7 @@
 // components/attendance/AttendanceList.tsx
 
 import React, { useState, useEffect } from 'react'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -72,9 +72,9 @@ const CreateAttendanceForm: React.FC<CreateAttendanceFormProps> = ({ onCreateAtt
 
   return (
     <Card className="mb-6">
-      <CardHeader>
+      {/* <CardHeader>
         <CardTitle>Create Attendance</CardTitle>
-      </CardHeader>
+      </CardHeader> */}
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
           <Input
@@ -83,10 +83,11 @@ const CreateAttendanceForm: React.FC<CreateAttendanceFormProps> = ({ onCreateAtt
             value={schoolId}
             onChange={(e) => setSchoolId(e.target.value)}
             required
+            className='hidden'
           />
           
           <div>
-            <h3 className="text-sm font-medium mb-2">Select Purpose (Required)</h3>
+            <h3 className="text-sm font-medium mb-2">Purposes</h3>
             {loading ? (
               <p>Loading purposes...</p>
             ) : purposes.length === 0 ? (
@@ -112,7 +113,7 @@ const CreateAttendanceForm: React.FC<CreateAttendanceFormProps> = ({ onCreateAtt
             )}
           </div>
         </CardContent>
-        <CardFooter className="flex justify-end items-end">
+        <CardFooter className="flex justify-end items-end hidden">
             <Button 
                 type="submit" 
                 disabled={!schoolId || !selectedPurpose}

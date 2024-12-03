@@ -1,6 +1,6 @@
 // utils/websocket.ts
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export enum AttendanceEventType {
     NewAttendance = 'NewAttendance',
@@ -46,43 +46,70 @@ export const useAttendanceWebSocket = () => {
     const [socket, setSocket] = useState<WebSocket | null>(null);
     const [attendances, setAttendances] = useState<Attendance[]>([]);
     const [isConnected, setIsConnected] = useState(false);
+    const processedIds = useRef(new Set<string>());
 
     const connectWebSocket = useCallback(() => {
+        console.log('Attempting to connect to WebSocket...');
         const newSocket = new WebSocket('ws://localhost:8080/ws');
         
         newSocket.onopen = () => {
-            console.log('WebSocket Connected');
+            console.log('✅ WebSocket Connected Successfully!');
+            console.log('Connection Details:', {
+                url: newSocket.url,
+                protocol: newSocket.protocol,
+                readyState: newSocket.readyState
+            });
             setIsConnected(true);
         };
 
         newSocket.onmessage = (event) => {
+            console.log('🔬 Received WebSocket Message:', event.data);
             try {
                 const data = JSON.parse(event.data);
+                console.log('📨 Parsed WebSocket Data:', data);
                 
                 if (data.AttendanceList) {
+                    console.log('📋 Received Attendance List:', data.AttendanceList);
                     const processedAttendances = data.AttendanceList.map((attendance: Partial<Attendance>) => 
                         processAttendance(attendance)
                     );
                     setAttendances(processedAttendances);
+                    processedIds.current = new Set(processedAttendances.map((a: Partial<Attendance>) => a.id));
                 } 
                 
                 if (data.NewAttendance) {
+                    console.log('🆕 Received New Attendance:', data.NewAttendance);
                     const processedAttendance = processAttendance(data.NewAttendance);
-                    setAttendances(prev => {
-                        const exists = prev.some(a => a.id === processedAttendance.id);
-                        return exists 
-                            ? prev 
-                            : [processedAttendance, ...prev].slice(0, 100);
-                    });
+                    
+                    if (!processedIds.current.has(processedAttendance.id)) {
+                        processedIds.current.add(processedAttendance.id);
+                        setAttendances(prev => {
+                            const exists = prev.some(a => a.id === processedAttendance.id);
+                            return exists 
+                                ? prev 
+                                : [processedAttendance, ...prev].slice(0, 100);
+                        });
+                    }
                 }
             } catch (error) {
-                console.error('WebSocket message parsing error:', error);
+                console.error('❌ WebSocket message parsing error:', error);
             }
         };
 
-        newSocket.onclose = () => {
+        newSocket.onerror = (error) => {
+            console.error('❌ WebSocket Error:', error);
             setIsConnected(false);
-            console.log('WebSocket Disconnected');
+        };
+
+        newSocket.onclose = (event) => {
+            console.log('🔌 WebSocket Disconnected:', {
+                code: event.code,
+                reason: event.reason,
+                wasClean: event.wasClean
+            });
+            
+            setIsConnected(false);
+            processedIds.current.clear();
             
             // Automatic reconnection with backoff
             setTimeout(connectWebSocket, 1000);
@@ -94,15 +121,22 @@ export const useAttendanceWebSocket = () => {
 
     useEffect(() => {
         const ws = connectWebSocket();
-        return () => ws.close();
+        return () => {
+            console.log('🧹 Cleaning up WebSocket connection');
+            ws.close();
+            processedIds.current.clear();
+        };
     }, [connectWebSocket]);
 
     const sendAttendance = useCallback((attendance: CreateAttendanceRequest) => {
         if (socket && isConnected) {
+            console.log('📤 Sending Attendance:', attendance);
             socket.send(JSON.stringify({
                 type: 'NewAttendance',
                 data: attendance
             }));
+        } else {
+            console.warn('❗ Cannot send attendance - WebSocket not connected');
         }
     }, [socket, isConnected]);
 

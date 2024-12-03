@@ -149,23 +149,6 @@ const SchoolAccountsPage: React.FC = () => {
                 </CardContent>
               </Card>
               <Card>
-              <CardHeader>
-                <CardTitle>Manage Semesters</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <SemesterModal onUpdate={handleSemesterUpdate} />
-              </CardContent>
-            </Card>
-            <Card className='hidden'>
-              <CardHeader>
-                <CardTitle>Manage Purposes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <PurposeModal onUpdate={fetchSchoolAccountsAndSemesters} />
-              </CardContent>
-            </Card>
-            </div>
-            <Card>
             <CardHeader>
               <div className="flex justify-between items-center w-full">
                 <CardTitle>Account Statistics</CardTitle>
@@ -187,6 +170,23 @@ const SchoolAccountsPage: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
+              {/* <Card>
+              <CardHeader>
+                <CardTitle>Manage Semesters</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <SemesterModal onUpdate={handleSemesterUpdate} />
+              </CardContent>
+            </Card> */}
+            <Card className='hidden'>
+              <CardHeader>
+                <CardTitle>Manage Purposes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PurposeModal onUpdate={fetchSchoolAccountsAndSemesters} />
+              </CardContent>
+            </Card>
+            </div>
             <Card>
               <CardHeader>
                 <CardTitle>Filter Accounts</CardTitle>

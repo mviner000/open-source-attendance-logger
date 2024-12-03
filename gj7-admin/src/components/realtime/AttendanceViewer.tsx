@@ -1,7 +1,7 @@
-// src/components/AttendanceViewer.tsx
+// src/components/AttendanceViewer.tsx your reference
 import React, { useEffect, useMemo, useCallback } from 'react';
 import { useAttendanceWebSocket, Attendance } from '@/utils/websocket';
-import { format, parseISO, isValid } from 'date-fns';
+import { format } from 'date-fns';
 
 const AttendanceViewer: React.FC = () => {
   const { attendances, isConnected } = useAttendanceWebSocket();

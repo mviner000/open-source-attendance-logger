@@ -1,7 +1,7 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useAttendanceWebSocket } from '@/utils/websocket';
 import { AttendanceApi, UpdateAttendanceRequest } from '@/lib/attendance';
-import { logger, LogLevel } from '@/lib/logger';
+import { LogLevel } from '@/lib/logger';
 import { downloadAttendanceTableAsPDF } from '@/utils/pdfUtils';
 import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 import { Button } from '@/components/ui/button';
@@ -12,39 +12,25 @@ import AttendanceTable from '../attendance/AttendanceTable';
 import SearchBar from '../SearchBar';
 import ViewToggle from '../ViewToggle';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { convertToAttendanceWithDates } from '@/types/attendance';
+import { AttendanceWithDates, convertToAttendanceWithDates } from '@/types/attendance';
 
 const AttendanceRecordsRealtime: React.FC = () => {
-  // WebSocket state
-  const { attendances, isConnected, sendAttendance } = useAttendanceWebSocket();
-  
-  // Local states
-  const [loading, setLoading] = useState(false);
+  const { attendances: rawAttendances, isConnected, sendAttendance } = useAttendanceWebSocket();
+  const attendances = rawAttendances.map(convertToAttendanceWithDates);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authAction, setAuthAction] = useState<'create' | 'delete'>('create');
-  const [credentials, setCredentials] = useState<{ username: string; password: string }>({ username: '', password: '' });
+  const [credentials, _setCredentials] = useState<{ username: string; password: string }>({ 
+    username: 'admin', 
+    password: 'your_password' 
+  });
   const [attendanceToDelete, setAttendanceToDelete] = useState<string | null>(null);
   const [view, setView] = useState<'card' | 'table'>('card');
 
   const { toast } = useToast();
 
-  // Convert string dates to Date objects
-  const attendancesWithDates = attendances.map(convertToAttendanceWithDates);
-
-  // Fetch credentials
-  const fetchCredentials = async () => {
-    try {
-      const creds = await AttendanceApi.getCredentials();
-      setCredentials(creds);
-    } catch (err) {
-      console.error('Failed to fetch credentials:', err);
-    }
-  };
-
-  // Toast callback
   const addToast = useCallback((message: string, level: LogLevel) => {
     toast({
       title: level.charAt(0).toUpperCase() + level.slice(1),
@@ -53,33 +39,21 @@ const AttendanceRecordsRealtime: React.FC = () => {
     });
   }, [toast]);
 
-  // Handle search
-  const handleSearch = useCallback(() => {
-    if (!searchQuery) return;
-    
-    const filteredAttendances = attendancesWithDates.filter(attendance => 
-      attendance.school_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      attendance.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (attendance.purpose_label || '').toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    
-    setSearchStatus(`Found ${filteredAttendances.length} matching records`);
-  }, [searchQuery, attendancesWithDates]);
-
-  // Clear search
   const handleClearSearch = () => {
     setSearchQuery('');
     setSearchStatus(null);
   };
 
-  // Handle auth submission
+  useEffect(() => {
+    console.log('WebSocket Connection Status Changed:', isConnected);
+  }, [isConnected]);
+
   const handleAuthSubmit = async (inputCredentials: { username: string; password: string }) => {
     try {
       if (inputCredentials.username === credentials.username && 
           inputCredentials.password === credentials.password) {
         setIsAuthModalOpen(false);
         if (authAction === 'create') {
-          // Handle create action through websocket
           sendAttendance({
             school_id: 'test',
             full_name: 'Test User',
@@ -96,7 +70,6 @@ const AttendanceRecordsRealtime: React.FC = () => {
     }
   };
 
-  // Update attendance
   const handleUpdateAttendance = async (attendanceId: string, updatedAttendance: UpdateAttendanceRequest) => {
     try {
       await AttendanceApi.updateAttendance(attendanceId, updatedAttendance, credentials.username, credentials.password);
@@ -107,7 +80,6 @@ const AttendanceRecordsRealtime: React.FC = () => {
     }
   };
 
-  // Delete attendance
   const deleteAttendance = async (attendanceId: string, auth: { username: string; password: string }) => {
     try {
       await AttendanceApi.deleteAttendance(attendanceId, auth.username, auth.password);
@@ -121,24 +93,20 @@ const AttendanceRecordsRealtime: React.FC = () => {
   };
 
   const handleDownloadPDF = useCallback(() => {
-    if (attendancesWithDates.length > 0) {
-      downloadAttendanceTableAsPDF(attendancesWithDates);
+    if (attendances.length > 0) {
+      downloadAttendanceTableAsPDF(attendances as AttendanceWithDates[]);
     } else {
       addToast('No attendance records to download', 'error');
     }
-  }, [attendancesWithDates, addToast]);
+  }, [attendances, addToast]);
 
-  const filteredAttendances = searchQuery
-    ? attendancesWithDates.filter(attendance =>
+  const filteredAttendances: AttendanceWithDates[] = searchQuery
+    ? attendances.filter(attendance =>
         attendance.school_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
         attendance.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (attendance.purpose_label || '').toLowerCase().includes(searchQuery.toLowerCase())
       )
-    : attendancesWithDates;
-
-  if (loading && !attendances.length) {
-    return <div className="p-4">Loading...</div>;
-  }
+    : attendances;
 
   return (
     <ToastProvider>
@@ -212,3 +180,4 @@ const AttendanceRecordsRealtime: React.FC = () => {
 };
 
 export default AttendanceRecordsRealtime;
+

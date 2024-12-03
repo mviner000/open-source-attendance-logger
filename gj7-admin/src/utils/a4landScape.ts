@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf'
-import { AttendanceWithDates } from '@/lib/attendance'
+import { AttendanceWithDates } from '@/types/attendance'
 
 // Constants for PDF layout
 const PAGE_WIDTH = 297 // A4 Landscape width in mm
@@ -79,7 +79,7 @@ export const downloadAttendanceTableAsPDF = async (attendances: AttendanceWithDa
 
       // Date
       pdf.rect(currentX, currentY, 25, ROW_HEIGHT)
-      pdf.text(record.time_in_date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).replace(/\b\w/g, l => l.toUpperCase()), currentX + 2, currentY + ROW_HEIGHT / 2 + TEXT_PADDING)
+      pdf.text(record.time_in_date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).replace(/\b\w/g, (l: string) => l.toUpperCase()), currentX + 2, currentY + ROW_HEIGHT / 2 + TEXT_PADDING)
       currentX += 25
 
       // Time
@@ -94,7 +94,7 @@ export const downloadAttendanceTableAsPDF = async (attendances: AttendanceWithDa
       // Name
       pdf.rect(currentX, currentY, 60, ROW_HEIGHT)
       pdf.text(
-        record.full_name.replace(/\b\w+/g, word => 
+        record.full_name.replace(/\b\w+/g, (word: string) => 
           word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
         ), 
         currentX + 2, 

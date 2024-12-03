@@ -1,6 +1,6 @@
 // src/components/AttendanceCreator.tsx
 import React, { useState, useMemo } from 'react';
-import { useAttendanceWebSocket, CreateAttendanceRequest, Attendance } from '@/utils/websocket';
+import { useAttendanceWebSocket, CreateAttendanceRequest } from '@/utils/websocket';
 import { format, parseISO, isValid } from 'date-fns';
 
 const AttendanceCreator: React.FC = () => {
