@@ -1,7 +1,5 @@
 import * as Icons from 'lucide-react';
 import { LucideIcon } from 'lucide-react';
-import { Button } from "@/components/ui/button";
-import { cn } from '@/lib/utils';
 
 type Step2ChoosePurposeProps = {
   handleScan: (purpose: string) => void;
@@ -24,7 +22,6 @@ const normalizeIconName = (iconName: string): string => {
 
 const Step2ChoosePurpose: React.FC<Step2ChoosePurposeProps> = ({
   handleScan,
-  isSubmitting,
   availablePurposes
 }) => {
   return (
