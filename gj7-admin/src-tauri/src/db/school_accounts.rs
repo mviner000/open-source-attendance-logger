@@ -34,6 +34,15 @@ pub struct SchoolAccount {
     pub last_updated_semester_id: Option<Uuid>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct PaginatedSchoolAccounts {
+    pub accounts: Vec<SchoolAccount>,
+    pub total_count: u64,
+    pub page: u64,
+    pub page_size: u64,
+    pub total_pages: u64,
+}
+
 // Create Request Struct
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct CreateSchoolAccountRequest {
@@ -90,6 +99,14 @@ pub trait SchoolAccountRepository: Send {
     fn get_all_school_accounts(&self, conn: &Connection) -> Result<Vec<SchoolAccount>>;
 
     fn search_school_accounts(&self, conn: &Connection, query: &str) -> Result<Vec<SchoolAccount>>;
+
+    fn get_paginated_school_accounts(
+        &self, 
+        conn: &Connection, 
+        page: u64, 
+        page_size: u64,
+        semester_id: Option<Uuid>
+    ) -> Result<PaginatedSchoolAccounts>;
 }
 
 pub struct SqliteSchoolAccountRepository;
@@ -233,6 +250,78 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
                 Err(e)
             }
         }
+    }
+
+    fn get_paginated_school_accounts(
+        &self, 
+        conn: &Connection, 
+        page: u64, 
+        page_size: u64,
+        semester_id: Option<Uuid>
+    ) -> Result<PaginatedSchoolAccounts> {
+        // Calculate offset
+        let offset = (page.saturating_sub(1)) * page_size;
+
+        // Base query with optional semester filtering
+        let base_query = "FROM school_accounts 
+            WHERE (?1 IS NULL OR last_updated_semester_id = ?1)";
+
+        // Count total records
+        let total_count: u64 = conn.query_row(
+            &format!("SELECT COUNT(*) {}", base_query),
+            params![semester_id.map(|id| id.to_string())],
+            |row| row.get(0)
+        )?;
+
+        // Calculate total pages
+        let total_pages = (total_count as f64 / page_size as f64).ceil() as u64;
+
+        // Fetch paginated accounts
+        let mut stmt = conn.prepare(&format!(
+            "SELECT * {} 
+            ORDER BY school_id 
+            LIMIT ?2 OFFSET ?3", 
+            base_query
+        ))?;
+
+        let account_iter = stmt.query_map(params![
+            semester_id.map(|id| id.to_string()), 
+            page_size, 
+            offset
+        ], |row| {
+            Ok(SchoolAccount {
+                id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
+                school_id: row.get(1)?,
+                first_name: row.get(2)?,
+                middle_name: row.get(3)?,
+                last_name: row.get(4)?,
+                gender: row.get::<_, Option<i32>>(5)?.map(|g| match g {
+                    0 => Gender::Male,
+                    1 => Gender::Female,
+                    _ => Gender::Other,
+                }),
+                course: row.get(6)?,
+                department: row.get(7)?,
+                position: row.get(8)?,
+                major: row.get(9)?,
+                year_level: row.get(10)?,
+                is_active: row.get(11)?,
+                last_updated_semester_id: row.get::<_, Option<String>>(12)?.map(|id| Uuid::parse_str(&id).unwrap()),
+            })
+        })?;
+
+        let mut accounts = Vec::new();
+        for account in account_iter {
+            accounts.push(account?);
+        }
+
+        Ok(PaginatedSchoolAccounts {
+            accounts,
+            total_count,
+            page,
+            page_size,
+            total_pages,
+        })
     }
 
     fn search_school_accounts(&self, conn: &Connection, query: &str) -> Result<Vec<SchoolAccount>> {

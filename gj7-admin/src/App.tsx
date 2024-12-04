@@ -7,6 +7,7 @@ import Sidebar from "./components/Sidebar";
 import AttendanceRecords from "./components/AttendanceRecords";
 import AttendanceRecordsRealtime from "./components/realtime/AttendanceRecordsRealtime";
 import AccountsStatsWithImportCSV from "./components/AccountsStatsWithImportCSV";
+import SchoolAccountsPage from "./components/SchoolAccountsPage";
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
                     <Route path="/attendance/realtime" element={<AttendanceRecordsRealtime />} />
                     <Route path="/attendance" element={<Attendance />} />
                     <Route path="/records" element={<AttendanceRecords />} />
+                    <Route path="/accounts/paginated" element={<SchoolAccountsPage />} />
                   </Routes>
                 </div>
               </div>

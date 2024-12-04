@@ -5,13 +5,13 @@ import { logger } from './logger';
 
 // Interface for Semester
 export interface Semester {
-  id: string;  // UUID as string
+  id: string; // UUID as string
   label: string;
 }
 
 // Updated SchoolAccount interface with proper semester relationship
 export interface SchoolAccount {
-  id: string;  // UUID as string
+  id: string; // UUID as string
   school_id: string;
   first_name: string | null;
   middle_name: string | null;
@@ -23,8 +23,24 @@ export interface SchoolAccount {
   major: string | null;
   year_level: string | null;
   is_active: boolean;
-  last_updated_semester_id: string | null;  // UUID of related semester
-  last_updated_semester?: Semester | null;  // Optional joined semester data
+  last_updated_semester_id: string | null; // UUID of related semester
+  last_updated_semester?: Semester | null; // Optional joined semester data
+}
+
+// New interface for pagination request
+export interface PaginationRequest {
+  page?: number;
+  page_size?: number;
+  semester_id?: string;
+}
+
+// New interface for paginated school accounts
+export interface PaginatedSchoolAccounts {
+  accounts: SchoolAccount[];
+  total_count: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
 }
 
 export const SchoolAccountsApi = {
@@ -55,9 +71,9 @@ export const SchoolAccountsApi = {
   async updateSchoolAccountSemester(id: string, semesterId: string): Promise<SchoolAccount> {
     try {
       logger.log(`Updating school account ${id} with semester ${semesterId}`, 'info');
-      const account = await invoke('update_school_account_semester', { 
-        id, 
-        semesterId 
+      const account = await invoke('update_school_account_semester', {
+        id,
+        semesterId
       });
       logger.log('Successfully updated school account semester', 'success');
       return account as SchoolAccount;
@@ -67,7 +83,41 @@ export const SchoolAccountsApi = {
     }
   },
 
-  // New method to extract unique courses
+  // New method for paginated school accounts retrieval
+  async getPaginatedSchoolAccounts(request: PaginationRequest = {}): Promise<PaginatedSchoolAccounts> {
+    try {
+      logger.log('Fetching paginated school accounts', 'info');
+      
+      // Set default values if not provided
+      const paginationRequest = {
+        page: request.page ?? 1,
+        page_size: request.page_size ?? 30,
+        semester_id: request.semester_id ?? null
+      };
+
+      const result = await invoke('get_paginated_school_accounts', { 
+        request: {
+          page: request.page ?? 1,
+          page_size: request.page_size ?? 30,
+          semester_id: request.semester_id ?? null
+        }
+      });
+      
+      logger.log(
+        `Successfully fetched paginated school accounts: page ${paginationRequest.page}, ` +
+        `page size ${paginationRequest.page_size}, ` +
+        `total accounts ${(result as PaginatedSchoolAccounts).total_count}`, 
+        'success'
+      );
+      
+      return result as PaginatedSchoolAccounts;
+    } catch (error) {
+      logger.log(`Failed to fetch paginated school accounts: ${error}`, 'error');
+      throw error;
+    }
+  },
+
+  // Existing method to extract unique courses
   extractUniqueCourses(accounts: SchoolAccount[]): string[] {
     return Array.from(
       new Set(

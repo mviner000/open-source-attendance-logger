@@ -52,6 +52,9 @@ const Navbar: React.FC = () => {
               <NavLink to="/attendance">
                 Purpose Manager
               </NavLink>
+              <NavLink to="/accounts/paginated">
+                Accounts Paginated
+              </NavLink>
             </div>
           </div>
 
@@ -81,6 +84,9 @@ const Navbar: React.FC = () => {
             </NavLink>
             <NavLink to="/attendance" mobile>
               Purpose Manager
+            </NavLink>
+            <NavLink to="/accounts/paginated" mobile>
+              Accounts Paginated
             </NavLink>
           </div>
           <div className="px-2 py-3">

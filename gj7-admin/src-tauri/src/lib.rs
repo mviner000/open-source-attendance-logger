@@ -153,6 +153,7 @@ pub fn run() {
 
                 // School account commands
                 school_account_commands::get_all_school_accounts,
+                school_account_commands::get_paginated_school_accounts,
                 school_account_commands::get_school_account_with_semester,
                 school_account_commands::update_school_account_semester,
 

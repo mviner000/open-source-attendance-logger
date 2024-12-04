@@ -1,4 +1,4 @@
-// lib/semester.ts use this for the endpoints
+// lib/semester.ts use
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from './logger';
 
