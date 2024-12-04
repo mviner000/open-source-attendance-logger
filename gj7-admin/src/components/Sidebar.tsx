@@ -1,24 +1,13 @@
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { SchoolAccountsApi } from '../lib/school_accounts'
 
 const Sidebar: React.FC = () => {
   const location = useLocation()
 
-  const handleSchoolAccountsClick = async (_e: React.MouseEvent) => {
-    
-    try {
-      const accounts = await SchoolAccountsApi.getAllSchoolAccounts()
-      console.log('Accounts fetched successfully:', accounts)
-    } catch (error) {
-      console.error('Error fetching school accounts:', error)
-    }
-  }
-
   const sidebarLinks = [
-    { path: '/', label: 'School Accounts', onClick: handleSchoolAccountsClick },
-    { path: '/records', label: 'Statistics Records' },
-    { path: '/attendance', label: ' Purpose Manager' }
+    { path: '/attendance/realtime', label: 'Statistics Records' },
+    { path: '/accounts/paginated', label: 'School Accounts' },
+    { path: '/purpose/manager', label: ' Purpose Manager' }
   ]
 
   const isActive = (path: string) => {
@@ -36,7 +25,6 @@ const Sidebar: React.FC = () => {
               <Link
                 key={link.path}
                 to={link.path}
-                onClick={link.onClick}
                 className={`block py-2 px-4 transition-colors duration-200 ${isActive(link.path)} relative`}
               >
                 {link.label}

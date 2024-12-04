@@ -2,7 +2,7 @@
 
 use tauri::State;
 use crate::DbState;
-use crate::db::school_accounts::{PaginatedSchoolAccounts, SchoolAccount, UpdateSchoolAccountRequest};
+use crate::db::school_accounts::{PaginatedSchoolAccounts, SchoolAccount, UpdateSchoolAccountRequest, AccountStatusCounts};
 use crate::db::semester::{Semester,};
 use rusqlite::Result;
 use uuid::Uuid;
@@ -14,6 +14,12 @@ pub struct SchoolAccountWithSemester {
     #[serde(flatten)]
     account: SchoolAccount,
     last_updated_semester: Option<Semester>,
+}
+
+#[derive(Serialize)]
+pub struct DashboardStats {
+    active_semester: Option<Semester>,
+    account_counts: AccountStatusCounts,
 }
 
 #[derive(Deserialize)]
@@ -34,6 +40,33 @@ pub async fn get_all_school_accounts(
             db_state.school_accounts.get_all_school_accounts(conn)
         })
         .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn get_dashboard_stats(
+    state: State<'_, DbState>,
+) -> Result<DashboardStats, String> {
+    let db_state = state.0.clone();
+    
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = db_state.get_connection_blocking();
+        
+        // Get both pieces of data
+        let active_semester = db_state.semester_repository
+            .get_active_semester(&conn)
+            .map_err(|e| e.to_string())?;
+            
+        let account_counts = db_state.school_accounts
+            .get_account_status_counts(&conn)
+            .map_err(|e| e.to_string())?;
+
+        Ok(DashboardStats {
+            active_semester,
+            account_counts,
+        })
     })
     .await
     .map_err(|e| e.to_string())?

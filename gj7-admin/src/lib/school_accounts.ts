@@ -3,6 +3,16 @@
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from './logger';
 
+interface AccountStatusCounts {
+  active_count: number;
+  inactive_count: number;
+}
+
+interface DashboardStats {
+  active_semester: Semester | null;
+  account_counts: AccountStatusCounts;
+}
+
 // Interface for Semester
 export interface Semester {
   id: string; // UUID as string
@@ -43,7 +53,19 @@ export interface PaginatedSchoolAccounts {
   total_pages: number;
 }
 
+
 export const SchoolAccountsApi = {
+  async getDashboardStats(): Promise<DashboardStats> {
+    try {
+      logger.log('Fetching dashboard stats', 'info');
+      const stats = await invoke('get_dashboard_stats');
+      logger.log('Successfully fetched dashboard stats', 'success');
+      return stats as DashboardStats;
+    } catch (error) {
+      logger.log(`Failed to fetch dashboard stats: ${error}`, 'error');
+      throw error;
+    }
+  },
   async getAllSchoolAccounts(): Promise<SchoolAccount[]> {
     try {
       logger.log('Fetching all school accounts', 'info');

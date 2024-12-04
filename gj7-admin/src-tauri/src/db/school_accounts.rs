@@ -16,6 +16,12 @@ pub enum Gender {
     Other,
 }
 
+#[derive(Debug, Serialize)]
+pub struct AccountStatusCounts {
+    pub active_count: u64,
+    pub inactive_count: u64,
+}
+
 // Struct representing the School Account
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SchoolAccount {
@@ -107,6 +113,8 @@ pub trait SchoolAccountRepository: Send {
         page_size: u64,
         semester_id: Option<Uuid>
     ) -> Result<PaginatedSchoolAccounts>;
+
+    fn get_account_status_counts(&self, conn: &Connection) -> Result<AccountStatusCounts>;
 }
 
 pub struct SqliteSchoolAccountRepository;
@@ -180,6 +188,25 @@ impl From<CreateSchoolAccountRequest> for UpdateSchoolAccountRequest {
 
 // Implement the repository for a specific database type (e.g., SQLite)
 impl SchoolAccountRepository for SqliteSchoolAccountRepository {
+    fn get_account_status_counts(&self, conn: &Connection) -> Result<AccountStatusCounts> {
+        let active_count: u64 = conn.query_row(
+            "SELECT COUNT(*) FROM school_accounts WHERE is_active = 1",
+            [],
+            |row| row.get(0)
+        )?;
+
+        let inactive_count: u64 = conn.query_row(
+            "SELECT COUNT(*) FROM school_accounts WHERE is_active = 0",
+            [],
+            |row| row.get(0)
+        )?;
+
+        Ok(AccountStatusCounts {
+            active_count,
+            inactive_count,
+        })
+    }
+
     fn create_school_account(&self, conn: &Connection, account: CreateSchoolAccountRequest) -> Result<SchoolAccount> {
         info!("Creating new school account with school_id: {}", account.school_id);
         

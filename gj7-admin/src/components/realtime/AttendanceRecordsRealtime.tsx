@@ -126,7 +126,7 @@ const AttendanceRecordsRealtime: React.FC = () => {
           </Alert>
         )}
 
-        <div className="flex items-center mb-4 justify-end space-x-2">
+        <div className="mt-4 flex items-center mb-5 justify-end space-x-2 max-w-screen-2xl -mx-44">
           <SearchBar
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}

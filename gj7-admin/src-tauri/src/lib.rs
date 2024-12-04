@@ -156,6 +156,7 @@ pub fn run() {
                 school_account_commands::get_paginated_school_accounts,
                 school_account_commands::get_school_account_with_semester,
                 school_account_commands::update_school_account_semester,
+                school_account_commands::get_dashboard_stats,
 
                 // CSV commands
                 csv_commands::validate_csv_file,

@@ -7,7 +7,7 @@ import { ToastProvider, ToastViewport } from "@/components/ui/toast"
 import { useToast } from '@/hooks/use-toast'
 import CreateAttendanceForm from './attendance/CreateAttendanceForm'
 
-const Attendance: React.FC = () => {
+const PurposeManager: React.FC = () => {
   // States
   const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
@@ -71,4 +71,4 @@ const Attendance: React.FC = () => {
   )
 }
 
-export default Attendance
+export default PurposeManager

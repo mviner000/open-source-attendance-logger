@@ -1,13 +1,11 @@
 import "./App.css";
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import Attendance from './components/Attendance';
-import SchoolAccounts from "./components/SchoolAccounts";
 import Navbar from "./components/Navbar";
 import Sidebar from "./components/Sidebar";
-import AttendanceRecords from "./components/AttendanceRecords";
 import AttendanceRecordsRealtime from "./components/realtime/AttendanceRecordsRealtime";
 import AccountsStatsWithImportCSV from "./components/AccountsStatsWithImportCSV";
 import { SchoolAccountsDataTable } from "./components/SchoolAccountsDataTable";
+import PurposeManager from "./components/PurposeManager";
 
 
 function App() {
@@ -25,11 +23,9 @@ function App() {
                 <div className="h-full overflow-y-auto">
                   <AccountsStatsWithImportCSV />
                   <Routes>
-                    <Route path="/" element={<SchoolAccounts />} />
-                    <Route path="/attendance/realtime" element={<AttendanceRecordsRealtime />} />
-                    <Route path="/attendance" element={<Attendance />} />
-                    <Route path="/records" element={<AttendanceRecords />} />
-                    <Route path="/accounts/paginated" element={<SchoolAccountsDataTable />} />
+                  <Route path="/accounts/paginated" element={<SchoolAccountsDataTable />} />
+                  <Route path="/attendance/realtime" element={<AttendanceRecordsRealtime />} />
+                    <Route path="/purpose/manager" element={<PurposeManager />} />
                   </Routes>
                 </div>
               </div>

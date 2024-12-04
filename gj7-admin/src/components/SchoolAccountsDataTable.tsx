@@ -175,9 +175,13 @@ export function SchoolAccountsDataTable() {
   });
 
   return (
-    <div className='px-5'>
-      {/* Semester Selector */}
-      <div className="mb-4">
+    <div className='max-w-screen-xl mx-auto mt-5 mb-5'>
+     
+
+      {/* Filtering */}
+      <div className="flex items-center py-4">
+         {/* Semester Selector */}
+      <div className="">
         <Select 
           value={selectedSemester || ''} 
           onValueChange={(value) => {
@@ -197,22 +201,11 @@ export function SchoolAccountsDataTable() {
           </SelectContent>
         </Select>
       </div>
-
-      {/* Filtering */}
-      <div className="flex items-center py-4">
-        <Input
-          placeholder="Filter by School ID..."
-          value={(table.getColumn("school_id")?.getFilterValue() as string) ?? ""}
-          onChange={(event) =>
-            table.getColumn("school_id")?.setFilterValue(event.target.value)
-          }
-          className="max-w-sm"
-        />
         
         {/* Column Visibility Toggle */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="ml-auto">
+            <Button variant="outlineAmber3d" className="ml-auto font-normal -mt-2" size="sm">
               Columns
             </Button>
           </DropdownMenuTrigger>

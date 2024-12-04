@@ -1,28 +1,10 @@
 import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import NetworkStatus from './NetworkStatus'
-import { SchoolAccountsApi } from '../lib/school_accounts'
 
 const Navbar: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const navigate = useNavigate()
-
-  const handleSchoolAccountsClick = async (e: React.MouseEvent) => {
-    e.preventDefault()
-    console.log('School Accounts link clicked')
-    
-    try {
-      console.log('Attempting to fetch school accounts...')
-      const accounts = await SchoolAccountsApi.getAllSchoolAccounts()
-      console.log('Accounts fetched successfully:', accounts)
-      console.log('Number of accounts:', accounts.length)
-      
-      navigate('/')
-    } catch (error) {
-      console.error('Error fetching school accounts:', error)
-    }
-  }
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen)
 
@@ -43,17 +25,14 @@ const Navbar: React.FC = () => {
               </span>
             </Link>
             <div className="hidden md:flex items-center space-x-4">
-              <NavLink to="/" onClick={handleSchoolAccountsClick}>
-                School Accounts
-              </NavLink>
               <NavLink to="/attendance/realtime">
                 Statistics Records
               </NavLink>
-              <NavLink to="/attendance">
-                Purpose Manager
-              </NavLink>
               <NavLink to="/accounts/paginated">
-                Accounts Paginated
+                School Accounts
+              </NavLink>
+              <NavLink to="/purpose/manager">
+                Purpose Manager
               </NavLink>
             </div>
           </div>
@@ -76,17 +55,14 @@ const Navbar: React.FC = () => {
       {isMenuOpen && (
         <div className="md:hidden">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-            <NavLink to="/" onClick={handleSchoolAccountsClick} mobile>
-              School Accounts
-            </NavLink>
             <NavLink to="/attendance/realtime" mobile>
               Statistics Records
             </NavLink>
-            <NavLink to="/attendance" mobile>
-              Purpose Manager
-            </NavLink>
             <NavLink to="/accounts/paginated" mobile>
-              Accounts Paginated
+              School Accounts
+            </NavLink>
+            <NavLink to="/purpose/manager" mobile>
+              Purpose Manager
             </NavLink>
           </div>
           <div className="px-2 py-3">

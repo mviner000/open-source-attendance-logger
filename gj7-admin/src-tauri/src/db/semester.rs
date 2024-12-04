@@ -30,11 +30,34 @@ pub trait SemesterRepository {
     fn delete_semester(&self, conn: &Connection, id: Uuid) -> Result<()>;
     fn get_all_semesters(&self, conn: &Connection) -> Result<Vec<Semester>>;
     fn set_active_semester(&self, conn: &Connection, id: Uuid) -> Result<Semester>;
+    fn get_active_semester(&self, conn: &Connection) -> Result<Option<Semester>>;
 }
 
 pub struct SqliteSemesterRepository;
 
 impl SemesterRepository for SqliteSemesterRepository {
+    fn get_active_semester(&self, conn: &Connection) -> Result<Option<Semester>> {
+        let result = conn.query_row(
+            "SELECT * FROM semesters WHERE is_active = 1",
+            [],
+            |row| {
+                Ok(Semester {
+                    id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
+                    label: row.get(1)?,
+                    is_active: row.get(2)?,
+                    created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(3)?).unwrap().with_timezone(&Utc),
+                    updated_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?).unwrap().with_timezone(&Utc),
+                })
+            },
+        );
+
+        match result {
+            Ok(semester) => Ok(Some(semester)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+    
     fn create_semester(&self, conn: &Connection, semester: CreateSemesterRequest) -> Result<Semester> {
         let id = Uuid::new_v4();
         let now = Utc::now();
