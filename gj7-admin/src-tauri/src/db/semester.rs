@@ -1,7 +1,5 @@
 // src/db/semester.rs
 
-// src/db/semester.rs
-
 use uuid::Uuid;
 use rusqlite::{params, Connection, Result};
 use serde::{Serialize, Deserialize};
@@ -13,6 +11,7 @@ use chrono::{DateTime, Utc};
 pub struct Semester {
     pub id: Uuid,
     pub label: String,
+    pub is_active: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -20,6 +19,7 @@ pub struct Semester {
 #[derive(Debug, Deserialize, Clone)]
 pub struct CreateSemesterRequest {
     pub label: String,
+    pub is_active: Option<bool>,
 }
 
 pub trait SemesterRepository {
@@ -29,6 +29,7 @@ pub trait SemesterRepository {
     fn update_semester(&self, conn: &Connection, id: Uuid, semester: CreateSemesterRequest) -> Result<Semester>;
     fn delete_semester(&self, conn: &Connection, id: Uuid) -> Result<()>;
     fn get_all_semesters(&self, conn: &Connection) -> Result<Vec<Semester>>;
+    fn set_active_semester(&self, conn: &Connection, id: Uuid) -> Result<Semester>;
 }
 
 pub struct SqliteSemesterRepository;
@@ -43,11 +44,15 @@ impl SemesterRepository for SqliteSemesterRepository {
             return Err(rusqlite::Error::InvalidParameterName("Semester label cannot be empty".to_string()));
         }
 
+        // Default is_active to false if not specified
+        let is_active = semester.is_active.unwrap_or(false);
+
         conn.execute(
-            "INSERT INTO semesters (id, label, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO semesters (id, label, is_active, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
                 id.to_string(), 
                 semester.label, 
+                is_active,
                 now.to_rfc3339(), 
                 now.to_rfc3339()
             ],
@@ -56,6 +61,7 @@ impl SemesterRepository for SqliteSemesterRepository {
         let created_semester = Semester {
             id,
             label: semester.label,
+            is_active,
             created_at: now,
             updated_at: now,
         };
@@ -72,8 +78,9 @@ impl SemesterRepository for SqliteSemesterRepository {
                 Ok(Semester {
                     id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
                     label: row.get(1)?,
-                    created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(2)?).unwrap().with_timezone(&Utc),
-                    updated_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(3)?).unwrap().with_timezone(&Utc),
+                    is_active: row.get(2)?,
+                    created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(3)?).unwrap().with_timezone(&Utc),
+                    updated_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?).unwrap().with_timezone(&Utc),
                 })
             },
         )?;
@@ -89,8 +96,9 @@ impl SemesterRepository for SqliteSemesterRepository {
                 Ok(Semester {
                     id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
                     label: row.get(1)?,
-                    created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(2)?).unwrap().with_timezone(&Utc),
-                    updated_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(3)?).unwrap().with_timezone(&Utc),
+                    is_active: row.get(2)?,
+                    created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(3)?).unwrap().with_timezone(&Utc),
+                    updated_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?).unwrap().with_timezone(&Utc),
                 })
             },
         )?;
@@ -101,9 +109,13 @@ impl SemesterRepository for SqliteSemesterRepository {
     fn update_semester(&self, conn: &Connection, id: Uuid, semester: CreateSemesterRequest) -> Result<Semester> {
         let now = Utc::now();
 
+        // Use the existing is_active status if not specified in the update request
+        let current_semester = self.get_semester(conn, id)?;
+        let is_active = semester.is_active.unwrap_or(current_semester.is_active);
+
         conn.execute(
-            "UPDATE semesters SET label = ?1, updated_at = ?2 WHERE id = ?3",
-            params![semester.label, now.to_rfc3339(), id.to_string()],
+            "UPDATE semesters SET label = ?1, is_active = ?2, updated_at = ?3 WHERE id = ?4",
+            params![semester.label, is_active, now.to_rfc3339(), id.to_string()],
         )?;
 
         self.get_semester(conn, id)
@@ -125,8 +137,9 @@ impl SemesterRepository for SqliteSemesterRepository {
             Ok(Semester {
                 id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
                 label: row.get(1)?,
-                created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(2)?).unwrap().with_timezone(&Utc),
-                updated_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(3)?).unwrap().with_timezone(&Utc),
+                is_active: row.get(2)?,
+                created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(3)?).unwrap().with_timezone(&Utc),
+                updated_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?).unwrap().with_timezone(&Utc),
             })
         })?;
 
@@ -137,14 +150,32 @@ impl SemesterRepository for SqliteSemesterRepository {
 
         Ok(semesters)
     }
+
+    fn set_active_semester(&self, conn: &Connection, id: Uuid) -> Result<Semester> {
+        // First, set all semesters to inactive
+        conn.execute(
+            "UPDATE semesters SET is_active = 0",
+            [],
+        )?;
+
+        // Then set the specified semester to active
+        conn.execute(
+            "UPDATE semesters SET is_active = 1, updated_at = ?1 WHERE id = ?2",
+            params![Utc::now().to_rfc3339(), id.to_string()],
+        )?;
+
+        // Retrieve and return the updated semester
+        self.get_semester(conn, id)
+    }
 }
 
-// SQL to create the semesters table with timestamps
+// SQL to create the semesters table with timestamps and is_active
 pub fn create_semesters_table(conn: &Connection) -> SqlResult<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS semesters (
             id TEXT PRIMARY KEY,
             label TEXT UNIQUE NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             CONSTRAINT label_unique UNIQUE (label)

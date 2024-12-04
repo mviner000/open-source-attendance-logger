@@ -126,7 +126,7 @@ const AttendanceRecordsRealtime: React.FC = () => {
           </Alert>
         )}
 
-        <div className="flex items-center mb-4 space-x-4">
+        <div className="flex items-center mb-4 justify-end space-x-2">
           <SearchBar
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
@@ -136,6 +136,9 @@ const AttendanceRecordsRealtime: React.FC = () => {
             view={view} 
             onViewChange={setView} 
           />
+            <Button size="sm" variant="amber3d" onClick={handleDownloadPDF} className="py-[18px]">
+              Download Attendance Table in PDF
+            </Button>
         </div>
 
         {searchStatus && (
@@ -161,9 +164,6 @@ const AttendanceRecordsRealtime: React.FC = () => {
           </div>
         ) : (
           <>
-            <Button onClick={handleDownloadPDF} className="mb-4">
-              Download Attendance Table in PDF
-            </Button>
             <AttendanceTable attendances={filteredAttendances} />
           </>
         )}

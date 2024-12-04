@@ -1,5 +1,4 @@
-// src/notes_commands.rs
-
+// src/semester_commands.rs
 use tauri::State;
 use uuid::Uuid;
 use crate::DbState;
@@ -14,7 +13,6 @@ pub async fn create_semester(
     password: String
 ) -> Result<Semester, String> {
     let conn = state.0.get_cloned_connection();
-    
     if state.0.auth.authenticate(&conn, &username, &password)? {
         state.0.semester_repository.create_semester(&conn, semester)
             .map_err(|e| e.to_string())
@@ -39,7 +37,6 @@ pub async fn get_semester(
 ) -> Result<Semester, String> {
     let semester_id = Uuid::parse_str(&id)
         .map_err(|e| format!("Invalid UUID format: {}", e))?;
-    
     let conn = state.0.get_cloned_connection();
     state.0.semester_repository.get_semester(&conn, semester_id)
         .map_err(|e| e.to_string())
@@ -65,9 +62,7 @@ pub async fn update_semester(
 ) -> Result<Semester, String> {
     let semester_id = Uuid::parse_str(&id)
         .map_err(|e| format!("Invalid UUID format: {}", e))?;
-    
-        let conn = state.0.get_cloned_connection();
-    
+    let conn = state.0.get_cloned_connection();
     if state.0.auth.authenticate(&conn, &username, &password)? {
         state.0.semester_repository.update_semester(&conn, semester_id, semester)
             .map_err(|e| e.to_string())
@@ -85,11 +80,27 @@ pub async fn delete_semester(
 ) -> Result<(), String> {
     let semester_id = Uuid::parse_str(&id)
         .map_err(|e| format!("Invalid UUID format: {}", e))?;
-    
-        let conn = state.0.get_cloned_connection();
-    
+    let conn = state.0.get_cloned_connection();
     if state.0.auth.authenticate(&conn, &username, &password)? {
         state.0.semester_repository.delete_semester(&conn, semester_id)
+            .map_err(|e| e.to_string())
+    } else {
+        Err("Authentication failed".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn set_active_semester(
+    state: State<'_, DbState>,
+    id: String,
+    username: String,
+    password: String
+) -> Result<Semester, String> {
+    let semester_id = Uuid::parse_str(&id)
+        .map_err(|e| format!("Invalid UUID format: {}", e))?;
+    let conn = state.0.get_cloned_connection();
+    if state.0.auth.authenticate(&conn, &username, &password)? {
+        state.0.semester_repository.set_active_semester(&conn, semester_id)
             .map_err(|e| e.to_string())
     } else {
         Err("Authentication failed".to_string())

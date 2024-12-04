@@ -1,16 +1,18 @@
-// lib/semester.ts
+// lib/semester.ts use this for the endpoints
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from './logger';
 
 export interface Semester {
   id: string; // UUID
   label: string;
+  is_active: boolean;
   created_at: string; // ISO 8601 datetime string
   updated_at: string; // ISO 8601 datetime string
 }
 
 export interface CreateSemesterRequest {
   label: string;
+  is_active?: boolean;
 }
 
 export const SemesterApi = {
@@ -22,6 +24,18 @@ export const SemesterApi = {
       return result as Semester;
     } catch (error) {
       logger.log(`Failed to create semester: ${error}`, 'error');
+      throw error;
+    }
+  },
+
+  async setActiveSemester(id: string, username: string, password: string): Promise<Semester> {
+    try {
+      logger.log(`Setting semester ${id} as active`, 'info');
+      const result = await invoke('set_active_semester', { id, username, password });
+      logger.log(`Successfully set semester ${id} as active`, 'success');
+      return result as Semester;
+    } catch (error) {
+      logger.log(`Failed to set semester ${id} as active: ${error}`, 'error');
       throw error;
     }
   },

@@ -39,7 +39,7 @@ const NetworkStatus: React.FC = () => {
       ) : (
         <p className="text-red-600">Offline</p>
       )}
-      <p>Last checked: {lastChecked ? new Date(lastChecked).toLocaleTimeString() : "N/A"}</p>
+      <p className='text-slate-200'>Last checked: {lastChecked ? new Date(lastChecked).toLocaleTimeString() : "N/A"}</p>
     </div>
   );
 };

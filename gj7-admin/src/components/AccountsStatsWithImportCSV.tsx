@@ -1,12 +1,15 @@
-// src/SchoolAccounts.tsx
+// src/AccountsStatsWithImportCSV.tsx semester-modal.tsx is used in here
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { SchoolAccountsApi, SchoolAccount } from '@/lib/school_accounts';
+import { SemesterApi, Semester } from '@/lib/semester';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SemesterModal } from '@/components/semester-modal';
 import CsvImportComponent from './CsvImportComponent';
 import { Button } from '@/components/ui/button';
 import { Loader2, Search, SquarePen } from 'lucide-react';
 import { SearchModal } from './search-modal';
+import { useToast } from "@/hooks/use-toast"
 
 const AccountsStatsWithImportCSV: React.FC = () => {
   const [schoolAccounts, setSchoolAccounts] = useState<SchoolAccount[]>([]);
@@ -14,15 +17,34 @@ const AccountsStatsWithImportCSV: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeCount, setActiveCount] = useState<number>(0);
   const [inactiveCount, setInactiveCount] = useState<number>(0);
-
+  const [activeSemester, setActiveSemester] = useState<Semester | null>(null);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [isSemesterModalOpen, setIsSemesterModalOpen] = useState(false);
   
+  const { toast } = useToast();
+
+  const fetchActiveSemester = async () => {
+    try {
+      const semesters = await SemesterApi.getAllSemesters();
+      const active = semesters.find(semester => semester.is_active);
+      setActiveSemester(active || null);
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Error Fetching Active Semester",
+        description: String(err)
+      });
+    }
+  };
 
   const fetchSchoolAccountsAndSemesters = useCallback(async () => {
     try {
       setLoading(true);
       
-      // Fetch semesters first
+      // Fetch active semester first
+      await fetchActiveSemester();
+      
+      // Fetch school accounts
       const allAccounts = await SchoolAccountsApi.getAllSchoolAccounts();
       
       // Fetch semester details for each account
@@ -64,8 +86,13 @@ const AccountsStatsWithImportCSV: React.FC = () => {
     fetchSchoolAccountsAndSemesters();
   };
 
+  const handleSemesterModalUpdate = () => {
+    fetchActiveSemester();
+    fetchSchoolAccountsAndSemesters();
+  };
+
   return (
-    <div className="flex-1 p-4 overflow-auto"> {/* Changed this line */}
+    <div className="flex-1 p-4 overflow-auto">
       <div className="w-full max-w-6xl mx-auto space-y-6">
         {loading ? (
           <div className="flex justify-center items-center">
@@ -93,50 +120,67 @@ const AccountsStatsWithImportCSV: React.FC = () => {
                 </CardContent>
               </Card>
               <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center w-full">
-                <CardTitle>
-                  <div className='flex items-center'>
-                    <span className='font-light mr-1'>Current Sem:</span>
-                    <span>School Year 2024-2025</span>
-                    <SquarePen className='ml-1 -mt-1 w-5.5 h-5.5'/>
+                <CardHeader>
+                  <div className="flex justify-between items-center w-full">
+                    <CardTitle>
+                      <div className='flex items-center'>
+                        <span className='font-light mr-1'>Current Sem:</span>
+                        <span>
+                          {activeSemester 
+                            ? activeSemester.label 
+                            : 'No Active Semester'}
+                        </span>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => setIsSemesterModalOpen(true)}
+                          className="-ml-2 -mt-1 hover:bg-transparent"
+                        >
+                          <SquarePen className='w-6 h-6'/>
+                        </Button>
+                      </div>
+                    </CardTitle>
+                    <div className="text-right flex items-center">
+                      <p className="text-sm font-medium">Total: <span className='font-bold'>{activeCount + inactiveCount}</span></p>
+                    </div>
                   </div>
-                  </CardTitle>
-                <div className="text-right flex items-center">
-                  <p className="text-sm font-medium">Total: <span className='font-bold'>{activeCount + inactiveCount}</span></p>
-                </div>
-              </div>
-            </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <p className="text-sm font-medium">Active Accounts</p>
-                    <p className="text-2xl font-bold">{activeCount}</p>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <p className="text-sm font-medium">Active Accounts</p>
+                      <p className="text-2xl font-bold">{activeCount}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Inactive Accounts</p>
+                      <p className="text-2xl font-bold">{inactiveCount}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">Inactive Accounts</p>
-                    <p className="text-2xl font-bold">{inactiveCount}</p>
-                  </div>
-                </div>
-                <Button 
-                  onClick={() => setIsSearchModalOpen(true)}
-                  className='w-full rounded-full border border-green-600'
-                  size="lg"
-                  variant="outline"
-                >
-                  <div className='flex items-center justify-center'>
-                  <Search className="mr-1.5 h-4" />
-                  <span className='mt-1'>Search</span>
-                  </div>
-                </Button>
-              </CardContent>
-            </Card>
-            
+                  <Button 
+                    onClick={() => setIsSearchModalOpen(true)}
+                    className='w-full rounded-full border border-green-600'
+                    size="lg"
+                    variant="outline"
+                  >
+                    <div className='flex items-center justify-center'>
+                    <Search className="mr-1.5 h-4" />
+                    <span className='mt-1'>Search</span>
+                    </div>
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
+            
             <SearchModal
               isOpen={isSearchModalOpen}
               onClose={() => setIsSearchModalOpen(false)}
               schoolAccounts={schoolAccounts}
+            />
+
+            <SemesterModal
+              isOpen={isSemesterModalOpen}
+              onOpenChange={(open) => setIsSemesterModalOpen(open)}
+              onUpdate={handleSemesterModalUpdate}
             />
           </>
         )}
@@ -146,4 +190,3 @@ const AccountsStatsWithImportCSV: React.FC = () => {
 };
 
 export default AccountsStatsWithImportCSV;
-

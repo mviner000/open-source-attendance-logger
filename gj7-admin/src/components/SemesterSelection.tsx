@@ -1,4 +1,4 @@
-// full codes
+// for reference of UI/UX
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import {
   CardFooter
 } from "@/components/ui/card";
 import { SemesterApi, Semester } from '../lib/semester';
-import { Plus, BookOpen, Calendar, Check } from 'lucide-react';
+import { Plus, Calendar, Check } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from '@/hooks/use-toast';
 

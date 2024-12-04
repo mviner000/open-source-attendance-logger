@@ -1,6 +1,6 @@
 // CsvImportComponent.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { CsvImportApi, CsvValidationResult, CsvImportResponse } from '../lib/csv_import';
 import { Semester } from '../lib/semester';
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from "@/components/ui/progress";
-import { FileSpreadsheet, AlertCircle, CheckCircle, FileUp, ClipboardCheck, Upload, Check, SquareLibrary, MoveRight } from 'lucide-react';
+import { FileSpreadsheet, AlertCircle, CheckCircle, FileUp, ClipboardCheck, Upload, Check, MoveRight } from 'lucide-react';
 import { CsvHeaderValidationErrors } from './CsvHeaderValidationErrors';
 import CsvContentValidationErrors from './CsvContentValidationErrors';
 import { SchoolAccount } from '@/lib/school_accounts';
@@ -371,6 +371,12 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </Alert>
           )}
 
+          {showExistingAccountInfo && existingAccountInfo && (
+            <div>
+              {/* Existing account information display */}
+            </div>
+          )}
+
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
@@ -390,7 +396,11 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </Button>
           )}
 
-          <Dialog open={showUpdateConfirmation} onOpenChange={setShowUpdateConfirmation}>
+          <Dialog open={showUpdateConfirmation}  onOpenChange={(open) => {
+            setShowUpdateConfirmation(open);
+            // Optional: update showExistingAccountInfo based on dialog state
+            setShowExistingAccountInfo(open);
+          }}>
             <DialogContent className="bg-white shadow-2xl border-2 border-green-100">
               <DialogHeader>
                 <DialogTitle className="text-2xl font-bold text-green-800 flex items-center">

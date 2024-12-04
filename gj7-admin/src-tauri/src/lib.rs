@@ -168,6 +168,7 @@ pub fn run() {
                 semester_commands::get_semester_by_label,
                 semester_commands::update_semester,
                 semester_commands::delete_semester,
+                semester_commands::set_active_semester,
 
                 // Purpose commands
                 purpose_commands::create_purpose,

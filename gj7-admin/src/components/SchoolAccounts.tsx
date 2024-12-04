@@ -4,20 +4,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { SchoolAccountsApi, SchoolAccount } from '@/lib/school_accounts';
 import { SemesterApi, Semester } from '@/lib/semester';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import CsvImportComponent from './CsvImportComponent';
-import { SemesterModal } from './semester-modal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Loader2, RefreshCw, Search } from 'lucide-react';
 import { SearchModal } from './search-modal';
-import { PurposeModal } from './purpose-modal';
 
 const SchoolAccountsPage: React.FC = () => {
   const [schoolAccounts, setSchoolAccounts] = useState<SchoolAccount[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeCount, setActiveCount] = useState<number>(0);
-  const [inactiveCount, setInactiveCount] = useState<number>(0);
 
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   
@@ -57,12 +52,6 @@ const SchoolAccountsPage: React.FC = () => {
         })
       );
 
-      // Calculate active and inactive counts
-      const activeAccounts = accountsWithSemester.filter(account => account.is_active);
-      const inactiveAccounts = accountsWithSemester.filter(account => !account.is_active);
-
-      setActiveCount(activeAccounts.length);
-      setInactiveCount(inactiveAccounts.length);
 
       setSchoolAccounts(accountsWithSemester);
       
@@ -89,14 +78,6 @@ const SchoolAccountsPage: React.FC = () => {
   useEffect(() => {
     fetchSchoolAccountsAndSemesters();
   }, [fetchSchoolAccountsAndSemesters]);
-
-  const handleImportSuccess = () => {
-    fetchSchoolAccountsAndSemesters();
-  };
-
-  const handleSemesterUpdate = () => {
-    fetchSchoolAccountsAndSemesters();
-  };
 
   // Filter accounts based on the selected filters
   const filteredAccounts = schoolAccounts.filter(account => {
