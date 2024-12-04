@@ -178,6 +178,7 @@ const SchoolAccountsPage: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
+            
             <Card>
             <CardHeader>
               <div className="flex justify-between items-center w-full">
