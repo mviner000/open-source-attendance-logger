@@ -118,26 +118,53 @@ export function SchoolAccountsDataTable() {
     },
     {
       accessorKey: "name",
-      header: "Name",
+      header: () => (
+        <div className="text-center">
+          Name
+        </div>
+      ),
       cell: ({ row }) => {
         const account = row.original;
         const names = [
-          account.first_name, 
-          account.middle_name, 
+          account.first_name,
+          account.middle_name,
           account.last_name
         ].filter(Boolean).join(' ');
-        return names || 'N/A';
-      }
+        
+        return (
+          <div className="text-center">
+            {names || 'N/A'}
+          </div>
+        );
+      },
     },
     {
       accessorKey: "course",
-      header: "Course",
-      cell: ({ row }) => row.getValue("course") || 'N/A'
+      header: () => (
+        <div className="text-center" style={{ width: "300px" }}>
+          Course
+        </div>
+      ),
+      cell: ({ row }) => (
+        <div
+          className="text-center truncate"
+          style={{ width: "300px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+        >
+          {row.getValue("course") || 'Faculty'}
+        </div>
+      ),
     },
     {
       accessorKey: "year_level",
-      header: "Year Level",
-      cell: ({ row }) => row.getValue("year_level") || 'N/A'
+      header: () => <div className="text-center" style={{ width: "150px" }}>Year Level</div>,
+      cell: ({ row }) => (
+        <div
+          className="text-center truncate"
+          style={{ width: "150px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+        >
+          {row.getValue("year_level") || ''}
+        </div>
+      ),
     },
     {
       accessorKey: "is_active",

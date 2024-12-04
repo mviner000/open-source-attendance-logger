@@ -58,7 +58,7 @@ const PurposeManager: React.FC = () => {
 
   return (
     <ToastProvider>
-      <div className="p-4 max-w-4xl mx-auto">
+      <div className="p-4 max-w-4xl mx-auto pb-10">
         {error && (
           <div className="bg-destructive text-destructive-foreground px-4 py-3 rounded mb-4">
             {error}

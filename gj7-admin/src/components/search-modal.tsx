@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react'; // Importing a spinner icon
 import { SchoolAccount } from '@/lib/school_accounts';
 
 interface SearchModalProps {
@@ -13,9 +14,26 @@ interface SearchModalProps {
 export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, schoolAccounts }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<SchoolAccount[]>([]);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Update debounced search term after 2 second delay
+  useEffect(() => {
+    if (searchTerm) {
+      setIsLoading(true);
+      const timer = setTimeout(() => {
+        setDebouncedSearchTerm(searchTerm);
+      }, 2000);
+
+      return () => {
+        clearTimeout(timer);
+        setIsLoading(false);
+      };
+    }
+  }, [searchTerm]);
 
   const handleSearch = useCallback(() => {
-    const lowercasedTerm = searchTerm.toLowerCase();
+    const lowercasedTerm = debouncedSearchTerm.toLowerCase();
     const results = schoolAccounts.filter((account) => {
       return (
         account.school_id.toLowerCase().includes(lowercasedTerm) ||
@@ -31,15 +49,18 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, schoo
       );
     });
     setSearchResults(results);
-  }, [searchTerm, schoolAccounts]);
+    setIsLoading(false);
+  }, [debouncedSearchTerm, schoolAccounts]);
 
+  // Trigger search when debounced search term changes
   useEffect(() => {
-    if (searchTerm) {
+    if (debouncedSearchTerm) {
       handleSearch();
     } else {
       setSearchResults([]);
+      setIsLoading(false);
     }
-  }, [searchTerm, handleSearch]);
+  }, [debouncedSearchTerm, handleSearch]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -50,40 +71,58 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, schoo
         <div className="grid gap-4 py-4">
           <div className="flex items-center gap-4">
             <Input
-      className="text-black"
-      placeholderClassName="placeholder:text-white"
+              className="text-black"
+              placeholderClassName="placeholder:text-white"
               id="search"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search..."
             />
-            <Button onClick={handleSearch}>Search</Button>
+            <Button 
+              onClick={() => {
+                setIsLoading(true);
+                setDebouncedSearchTerm(searchTerm);
+              }}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                'Search'
+              )}
+            </Button>
           </div>
           <div>
             <p className="text-sm text-gray-500">
-              Results: {searchResults.length}
+              {isLoading ? 'Searching...' : `Results: ${searchResults.length}`}
             </p>
-            <div className="mt-2 max-h-[300px] overflow-y-auto">
-              {searchResults.map((account) => (
-                <div key={account.id} className="border-b py-2 flex items-center">
-                  <div className="flex-grow">
-                    <div className="flex items-center gap-2">
-                      <span 
-                        className={`h-2 w-2 rounded-full ${
-                          account.is_active ? 'bg-green-500' : 'bg-red-500'
-                        }`}
-                      />
-                      <p className="font-medium">{account.school_id}</p>
+            {isLoading ? (
+              <div className="flex justify-center items-center mt-4">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              </div>
+            ) : (
+              <div className="mt-2 max-h-[300px] overflow-y-auto">
+                {searchResults.map((account) => (
+                  <div key={account.id} className="border-b py-2 flex items-center">
+                    <div className="flex-grow">
+                      <div className="flex items-center gap-2">
+                        <span 
+                          className={`h-2 w-2 rounded-full ${
+                            account.is_active ? 'bg-green-500' : 'bg-red-500'
+                          }`}
+                        />
+                        <p className="font-medium">{account.school_id}</p>
+                      </div>
+                      <p>{`${account.first_name || ''} ${account.middle_name || ''} ${account.last_name || ''}`}</p>
+                      <p className="text-sm text-gray-500">{account.course || account.position}</p>
                     </div>
-                    <p>{`${account.first_name || ''} ${account.middle_name || ''} ${account.last_name || ''}`}</p>
-                    <p className="text-sm text-gray-500">{account.course || account.position}</p>
+                    <span className="text-xs text-gray-500">
+                      {account.is_active ? 'Active' : 'Inactive'}
+                    </span>
                   </div>
-                  <span className="text-xs text-gray-500">
-                    {account.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </DialogContent>
