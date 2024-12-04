@@ -5,7 +5,7 @@ import { SchoolAccountsApi, SchoolAccount } from '@/lib/school_accounts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import CsvImportComponent from './CsvImportComponent';
 import { Button } from '@/components/ui/button';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2, Search, SquarePen } from 'lucide-react';
 import { SearchModal } from './search-modal';
 
 const AccountsStatsWithImportCSV: React.FC = () => {
@@ -95,7 +95,13 @@ const AccountsStatsWithImportCSV: React.FC = () => {
               <Card>
             <CardHeader>
               <div className="flex justify-between items-center w-full">
-                <CardTitle>Account Statistics</CardTitle>
+                <CardTitle>
+                  <div className='flex items-center'>
+                    <span className='font-light mr-1'>Current Sem:</span>
+                    <span>School Year 2024-2025</span>
+                    <SquarePen className='ml-1 -mt-1 w-5.5 h-5.5'/>
+                  </div>
+                  </CardTitle>
                 <div className="text-right flex items-center">
                   <p className="text-sm font-medium">Total: <span className='font-bold'>{activeCount + inactiveCount}</span></p>
                 </div>

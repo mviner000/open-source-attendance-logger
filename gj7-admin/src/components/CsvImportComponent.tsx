@@ -186,8 +186,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
               </div>
               {shouldShowCancelButton && (
                 <Button 
-                  variant="outline" 
-                  className="border-red-500 text-red-500 hover:bg-red-50"
+                  variant="outlineAmber3d" 
                   onClick={() => {
                     resetState();
                   }}
@@ -234,10 +233,11 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
           {fullFilePath && !isFileImported && !existingAccountInfo && (
             <div className="flex justify-end items-center">
               <Button 
-                onClick={validateFile} 
+                onClick={validateFile}
+                variant="amber3d"
                 disabled={!fullFilePath || isValidating}
-                className={`flex items-center justify-center gap-2 pl-4 border border-yellow-700 pr-5 py-3 text-white font-semibold transition duration-200 ease-in-out ${
-                  isValidating || !fullFilePath ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600 active:scale-95'
+                className={`flex items-center justify-center gap-2 pl-4 ${
+                  isValidating || !fullFilePath ? 'bg-amber-400 cursor-not-allowed' : 'active:scale-95'
                 }`}
               >
                 <MoveRight className="w-5 h-5" />
@@ -261,12 +261,12 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
                 <Button 
                   onClick={handleImportClick} 
                   disabled={isImporting}
-                  variant="default"
-                  className="flex items-center justify-center gap-2 pl-4 border border-yellow-500 pr-5 py-3 text-white font-semibold transition duration-200 ease-in-out bg-green-600 hover:bg-green-900 active:scale-95"
+                  variant="amber3d"
+                  className="flex items-center justify-center gap-2 pl-4"
                 >
-                  <Upload className="w-4 h-4" />
+                  <MoveRight className="w-4 h-4" />
                   <span className='mt-1'>
-                  {isImporting ? 'Importing...' : 'Import File'}
+                  {isImporting ? 'Processing...' : 'Continue'}
                   </span>
                 </Button>
               </div>
@@ -381,12 +381,12 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
 
           {currentStep === 3 && importResult && importResult.failed_imports === 0 && (
             <Button
-              size="lg"
               onClick={handleFinish}
-              className="w-full bg-green-700"
+              variant="green3d"
+              className='w-full text-white'
             >
               <Check className="w-4 h-4" />
-              <span className='mt-1 -ml-1'>Finish</span>
+              <span className='mt-1 -ml-1'>Completely Done</span>
             </Button>
           )}
 
@@ -418,14 +418,14 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
               </DialogHeader>
               <DialogFooter className="flex space-x-2">
                 <Button
-                  variant="outline"
+                  variant="outlineAmber3d"
                   onClick={() => setShowUpdateConfirmation(false)}
-                  className="border-gray-300 text-gray-700 hover:bg-gray-100"
                 >
                   Cancel
                 </Button>
                 <Button
-                  className='bg-green-600 hover:bg-green-700 flex items-center'
+                  variant="green3d"
+                  className='flex items-center'
                   onClick={async () => {
                     setShowExistingAccountInfo(false);
                     setShowImportSection(false);

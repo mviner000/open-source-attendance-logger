@@ -1,11 +1,12 @@
 // lib/semester.ts
-
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from './logger';
 
 export interface Semester {
-  id: string;  // UUID
+  id: string; // UUID
   label: string;
+  created_at: string; // ISO 8601 datetime string
+  updated_at: string; // ISO 8601 datetime string
 }
 
 export interface CreateSemesterRequest {

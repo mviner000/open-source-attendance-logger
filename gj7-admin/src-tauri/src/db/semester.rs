@@ -1,15 +1,20 @@
 // src/db/semester.rs
 
+// src/db/semester.rs
+
 use uuid::Uuid;
 use rusqlite::{params, Connection, Result};
 use serde::{Serialize, Deserialize};
 use log::{info};
 use rusqlite::Result as SqlResult;
+use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Semester {
     pub id: Uuid,
     pub label: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -31,6 +36,7 @@ pub struct SqliteSemesterRepository;
 impl SemesterRepository for SqliteSemesterRepository {
     fn create_semester(&self, conn: &Connection, semester: CreateSemesterRequest) -> Result<Semester> {
         let id = Uuid::new_v4();
+        let now = Utc::now();
 
         // Validate semester label
         if semester.label.is_empty() {
@@ -38,13 +44,20 @@ impl SemesterRepository for SqliteSemesterRepository {
         }
 
         conn.execute(
-            "INSERT INTO semesters (id, label) VALUES (?1, ?2)",
-            params![id.to_string(), semester.label],
+            "INSERT INTO semesters (id, label, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+            params![
+                id.to_string(), 
+                semester.label, 
+                now.to_rfc3339(), 
+                now.to_rfc3339()
+            ],
         )?;
 
         let created_semester = Semester {
             id,
             label: semester.label,
+            created_at: now,
+            updated_at: now,
         };
 
         info!("Created semester: {}", created_semester.label);
@@ -59,6 +72,8 @@ impl SemesterRepository for SqliteSemesterRepository {
                 Ok(Semester {
                     id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
                     label: row.get(1)?,
+                    created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(2)?).unwrap().with_timezone(&Utc),
+                    updated_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(3)?).unwrap().with_timezone(&Utc),
                 })
             },
         )?;
@@ -74,6 +89,8 @@ impl SemesterRepository for SqliteSemesterRepository {
                 Ok(Semester {
                     id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
                     label: row.get(1)?,
+                    created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(2)?).unwrap().with_timezone(&Utc),
+                    updated_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(3)?).unwrap().with_timezone(&Utc),
                 })
             },
         )?;
@@ -82,9 +99,11 @@ impl SemesterRepository for SqliteSemesterRepository {
     }
 
     fn update_semester(&self, conn: &Connection, id: Uuid, semester: CreateSemesterRequest) -> Result<Semester> {
+        let now = Utc::now();
+
         conn.execute(
-            "UPDATE semesters SET label = ?1 WHERE id = ?2",
-            params![semester.label, id.to_string()],
+            "UPDATE semesters SET label = ?1, updated_at = ?2 WHERE id = ?3",
+            params![semester.label, now.to_rfc3339(), id.to_string()],
         )?;
 
         self.get_semester(conn, id)
@@ -106,6 +125,8 @@ impl SemesterRepository for SqliteSemesterRepository {
             Ok(Semester {
                 id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
                 label: row.get(1)?,
+                created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(2)?).unwrap().with_timezone(&Utc),
+                updated_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(3)?).unwrap().with_timezone(&Utc),
             })
         })?;
 
@@ -118,12 +139,14 @@ impl SemesterRepository for SqliteSemesterRepository {
     }
 }
 
-// SQL to create the simplified semesters table
+// SQL to create the semesters table with timestamps
 pub fn create_semesters_table(conn: &Connection) -> SqlResult<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS semesters (
             id TEXT PRIMARY KEY,
             label TEXT UNIQUE NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
             CONSTRAINT label_unique UNIQUE (label)
         )",
         [],

@@ -32,7 +32,7 @@ const Navbar: React.FC = () => {
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               <Link to="#" className="text-xl font-bold text-gray-100 hover:text-gray-300 transition-colors">
-                Team Esternon
+                School Year 2024-2025
               </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
