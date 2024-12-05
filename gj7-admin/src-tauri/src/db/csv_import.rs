@@ -8,7 +8,7 @@ use uuid::Uuid;
 use rusqlite::{Connection, params};
 use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ExistingAccountInfo {
     pub existing_id: String,
     pub school_id: String,

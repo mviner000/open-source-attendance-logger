@@ -14,6 +14,7 @@ mod attendance_commands;
 mod network_server;
 mod websocket;
 mod logger;
+mod parallel_csv_processor;
 
 use tauri::Manager;
 use tauri::Emitter;
