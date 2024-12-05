@@ -82,7 +82,8 @@ pub struct CsvValidator {
 impl CsvValidator {
     pub fn new(connection: Connection) -> Self {
         CsvValidator {
-            max_file_size: 10 * 1024 * 1024, 
+            // 10MB Max File Size
+            max_file_size: 100 * 1024 * 1024,
             required_headers: vec![
                 "student_id".to_string(),
                 "first_name".to_string(),

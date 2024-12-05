@@ -18,6 +18,31 @@ export interface CreateSemesterRequest {
 export const SemesterApi = {
   async createSemester(semester: CreateSemesterRequest, username: string, password: string): Promise<Semester> {
     try {
+      // First, check if there are any existing semesters
+      const existingSemesters = await this.getAllSemesters();
+      
+      // If no semesters exist or no active semester is found, set this semester as active
+      if (existingSemesters.length === 0 || !existingSemesters.some(s => s.is_active)) {
+        semester.is_active = true;
+      } else {
+        // If there are active semesters, first deactivate all existing semesters
+        const activeSemesters = existingSemesters.filter(s => s.is_active);
+        for (const activeSemester of activeSemesters) {
+          await this.updateSemester(
+            activeSemester.id, 
+            { 
+              label: activeSemester.label, 
+              is_active: false 
+            }, 
+            username, 
+            password
+          );
+        }
+        
+        // Ensure the new semester is set as active
+        semester.is_active = true;
+      }
+  
       logger.log(`Creating new semester: ${semester.label}`, 'info');
       const result = await invoke('create_semester', { semester, username, password });
       logger.log(`Successfully created semester: ${semester.label}`, 'success');

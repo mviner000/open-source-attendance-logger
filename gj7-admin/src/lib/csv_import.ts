@@ -192,7 +192,7 @@ export const CsvImportApi = {
       
       const result = await invoke('import_csv_file', { 
         filePath: request.file_path,
-        semesterId: request.semester_id,
+        lastUpdatedSemesterId: request.semester_id,
         forceUpdate: request.force_update || false,
         previewOnly: request.preview_only || false
       });

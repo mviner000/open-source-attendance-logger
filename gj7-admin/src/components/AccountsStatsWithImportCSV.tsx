@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Search, SquarePen } from 'lucide-react';
 import { SearchModal } from './search-modal';
 import { useToast } from "@/hooks/use-toast"
+import SemesterCard from './SemesterCard';
 
 const AccountsStatsWithImportCSV: React.FC = () => {
   const [schoolAccounts, setSchoolAccounts] = useState<SchoolAccount[]>([]);
@@ -96,60 +97,15 @@ const AccountsStatsWithImportCSV: React.FC = () => {
                   <CsvImportComponent onImportSuccess={handleImportSuccess} />
                 </CardContent>
               </Card>
-              <Card>
-                <CardHeader>
-                  <div className="flex justify-between items-center w-full">
-                    <CardTitle>
-                      <div className='flex items-center'>
-                        <span className='font-light mr-1'>Current Sem:</span>
-                        <span>
-                          {activeSemester 
-                            ? activeSemester.label 
-                            : 'No Active Semester'}
-                        </span>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => setIsSemesterModalOpen(true)}
-                          className="-ml-2 -mt-1 hover:bg-transparent"
-                        >
-                          <SquarePen className='w-6 h-6'/>
-                        </Button>
-                      </div>
-                    </CardTitle>
-                    <div className="text-right flex items-center">
-                      <p className="text-sm font-medium">
-                        Total: <span className='font-bold'>
-                          {accountCounts.active_count + accountCounts.inactive_count}
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <p className="text-sm font-medium">Active Accounts</p>
-                      <p className="text-2xl font-bold">{accountCounts.active_count}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">Inactive Accounts</p>
-                      <p className="text-2xl font-bold">{accountCounts.inactive_count}</p>
-                    </div>
-                  </div>
-                  <Button 
-                    onClick={() => setIsSearchModalOpen(true)}
-                    className='w-full rounded-full border border-green-600'
-                    size="lg"
-                    variant="outline"
-                  >
-                    <div className='flex items-center justify-center'>
-                      <Search className="mr-1.5 h-4" />
-                      <span className='mt-1'>Search</span>
-                    </div>
-                  </Button>
-                </CardContent>
-              </Card>
+
+              <SemesterCard
+                  activeSemester={activeSemester}
+                  setIsSemesterModalOpen={setIsSemesterModalOpen}
+                  accountCounts={accountCounts}
+                  setIsSearchModalOpen={setIsSearchModalOpen}
+                />
+
+              
             </div>
             
             <SearchModal

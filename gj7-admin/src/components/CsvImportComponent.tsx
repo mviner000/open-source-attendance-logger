@@ -9,14 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from "@/components/ui/progress";
-import { FileSpreadsheet, AlertCircle, CheckCircle, FileUp, ClipboardCheck, Upload, Check, MoveRight, MessageCircle } from 'lucide-react';
+import { FileSpreadsheet, AlertCircle, CheckCircle, FileUp, ClipboardCheck, Upload, Check, MoveRight } from 'lucide-react';
 import { CsvHeaderValidationErrors } from './CsvHeaderValidationErrors';
 import CsvContentValidationErrors from './CsvContentValidationErrors';
 import { SchoolAccount } from '@/lib/school_accounts';
 import ImportLoadingState from './ImportLoadingState';
 import SemesterSelection from './SemesterSelection';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface CsvImportComponentProps {
@@ -55,7 +54,6 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
   const [isShowingImportLoadingState, setIsShowingImportLoadingState] = useState(false);
   const [logMessages, setLogMessages] = useState<LogMessage[]>([]);
   const [logListener, setLogListener] = useState<UnlistenFn | null>(null);
-  const [activeTab, setActiveTab] = useState<'statistics' | 'logs'>('statistics');
 
   // Create a callback to handle log messages
   const handleLogMessage = useCallback((message: LogMessage) => {
@@ -215,7 +213,6 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
       setShowStatistics(true);
       setCurrentStep(3);
       setIsFileImported(true);
-      setActiveTab('statistics');
 
       return result;
     } catch (err) {

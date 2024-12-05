@@ -7,7 +7,6 @@ use crate::db::csv_import::{CsvValidator, CsvValidationResult};
 use crate::db::csv_transform::{CsvTransformer, batch_transform_records};
 use crate::db::school_accounts::{SchoolAccount, CreateSchoolAccountRequest};
 use crate::parallel_csv_processor::process_csv_with_progress;
-use crate::db::csv_import::ExistingAccountInfo;
 use crate::parallel_csv_processor::ParallelCsvProcessor;
 use crate::logger::{emit_log, LogMessage};
 use csv::StringRecord;
@@ -19,6 +18,14 @@ pub struct AccountStatusCounts {
     pub activated_accounts: usize,
     pub deactivated_accounts: usize,
 
+}
+
+
+#[derive(serde::Serialize, Debug, Clone)] 
+pub struct ExistingAccountInfo {
+    pub existing_accounts: Vec<SchoolAccount>,
+    pub new_accounts_count: usize,
+    pub existing_accounts_count: usize,
 }
 
 #[derive(serde::Serialize)]
@@ -106,20 +113,9 @@ pub async fn check_existing_accounts(
     }
     
     Ok(ExistingAccountInfo {
-        existing_id: "".to_string(),
-        school_id: "".to_string(),
-        first_name: None,
-        middle_name: None,
-        last_name: None,
-        gender: None,
-        course: None,
-        department: None,
-        position: None,
-        major: None,
-        year_level: None,
-        is_active: None,
-        last_updated_semester_id: None,
-        row_number: 0,
+        existing_accounts: existing_accounts.clone(), // Create a clone to avoid move
+        new_accounts_count,
+        existing_accounts_count: existing_accounts.len(),
     })
 }
 
@@ -166,7 +162,7 @@ pub async fn import_csv_file(
     app_handle: tauri::AppHandle,
     state: State<'_, DbState>,
     file_path: String,
-    semester_id: Uuid,
+    last_updated_semester_id: Uuid,
     force_update: bool
 ) -> Result<CsvImportResponse, String> {
     let path = Path::new(&file_path);
@@ -181,22 +177,22 @@ pub async fn import_csv_file(
     let validation_result = validator.validate_file(path)
         .map_err(|errors| format!("Validation failed: {:?}", errors))?;
     
-    // Read the entire file contents
-    let file_contents = std::fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    // Read the entire file into memory first
+    let mut file = std::fs::File::open(path)
+        .map_err(|e| format!("Failed to open CSV file: {}", e))?;
     
-    // Create a new CSV reader from the file contents
-    let mut rdr = csv::Reader::from_reader(file_contents.as_bytes());
+    // Create a new CSV reader from the file
+    let mut rdr = csv::Reader::from_reader(file);
     
-    // Get headers 
+    // Get headers
     let headers = rdr.headers()
         .map_err(|e| format!("Failed to read headers: {}", e))?
-        .clone();
+        .clone(); // Clone headers before consuming the reader
     
     // Collect all records
     let records: Vec<StringRecord> = rdr.records()
-        .filter_map(Result::ok)
-        .collect();
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Error reading CSV records: {}", e))?;
     
     // Get existing accounts info before processing
     let conn = state.0.get_cloned_connection();
@@ -233,12 +229,14 @@ pub async fn import_csv_file(
     };
 
     // Process the CSV data with parallel processor
+    // Add last_updated_semester_id to the context passed to the processor
     let processing_result = process_csv_with_progress(
         &processor,
         records.clone(),
         headers.clone(),
         vec![existing_accounts.clone()],
         progress_callback,
+        Some(last_updated_semester_id)
     );
 
     // Collect school_ids from the CSV to be set as active
@@ -247,26 +245,30 @@ pub async fn import_csv_file(
         .map(String::from)
         .collect();
 
-    // Activate the imported accounts
+    // Activate the imported accounts and associate with semester
     let activated_accounts = if !school_ids.is_empty() {
         let placeholders = school_ids.iter().map(|_| "?").collect::<Vec<&str>>().join(",");
         let activate_query = format!(
-            "UPDATE school_accounts SET is_active = 1 WHERE school_id IN ({})",
+            "UPDATE school_accounts 
+            SET is_active = 1, last_updated_semester_id = ? 
+            WHERE school_id IN ({})",
             placeholders
         );
         
         let conn = state.0.get_cloned_connection();
-        let params: Vec<&dyn rusqlite::ToSql> = school_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+        let last_updated_semester_id_str = last_updated_semester_id.to_string();
+        let mut params: Vec<&dyn rusqlite::ToSql> = vec![&last_updated_semester_id_str];
+        params.extend(school_ids.iter().map(|id| id as &dyn rusqlite::ToSql));
         
         conn.execute(
             &activate_query, 
             params.as_slice()
-        ).map_err(|e| format!("Failed to activate imported accounts: {}", e))?;
+        ).map_err(|e| format!("Failed to activate and associate imported accounts: {}", e))?;
         
         // Count activated accounts
         conn.query_row(
-            "SELECT COUNT(*) FROM school_accounts WHERE is_active = 1",
-            [],
+            "SELECT COUNT(*) FROM school_accounts WHERE is_active = 1 AND last_updated_semester_id = ?",
+            [&last_updated_semester_id_str],
             |row| row.get(0)
         ).map_err(|e| format!("Failed to count activated accounts: {}", e))?
     } else {
@@ -299,7 +301,7 @@ pub async fn import_csv_file(
     };
     
     info!("CSV import completed: {} total, {} successful, {} failed, Semester={}", 
-        records.len(), processing_result.successful, processing_result.failed, semester_id);
+        records.len(), processing_result.successful, processing_result.failed, last_updated_semester_id);
     
     info!("Account Status Counts:");
     info!("  Total Accounts: {}", total_accounts_after);

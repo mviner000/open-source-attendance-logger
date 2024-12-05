@@ -90,23 +90,30 @@ const SemesterSelection: React.FC<SemesterSelectionProps> = ({ onSemesterSelect 
       });
       return;
     }
-
+  
     try {
       const newSemester = await SemesterApi.createSemester(
         { label: newSemesterName }, 
         "admin", 
         "your_password"
       );
+      
+      // Update the semesters list
       setSemesters([newSemester, ...semesters]);
-      onSemesterSelect(newSemester);
-      setSelectedSemesterId(newSemester.id);
+      
+      // If the new semester is active, update the selected semester
+      if (newSemester.is_active) {
+        setSelectedSemesterId(newSemester.id);
+        onSemesterSelect(newSemester);
+      }
+      
       setShowNewSemesterDialog(false);
       
       toast({
         title: "Success",
-        description: `Semester "${newSemesterName}" created successfully`,
+        description: `Semester "${newSemesterName}" ${newSemester.is_active ? 'created and set as active' : 'created successfully'}`,
       });
-
+  
       setNewSemesterName('');
       setError(null);
     } catch (err) {

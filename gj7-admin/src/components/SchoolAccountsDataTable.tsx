@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   ColumnDef,
   ColumnFiltersState,
@@ -27,7 +27,6 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { 
   DropdownMenu, 
   DropdownMenuCheckboxItem, 
@@ -35,7 +34,7 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
-import { SchoolAccountsApi, SchoolAccount, PaginatedSchoolAccounts } from '../lib/school_accounts';
+import { SchoolAccountsApi, SchoolAccount } from '../lib/school_accounts';
 import { SemesterApi, Semester } from '../lib/semester';
 
 export function SchoolAccountsDataTable() {

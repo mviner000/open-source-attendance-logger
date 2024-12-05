@@ -9,7 +9,7 @@ use csv::StringRecord;
 use uuid::Uuid;
 use rusqlite::{Connection, Transaction};
 use crate::db::school_accounts::{SchoolAccount, CreateSchoolAccountRequest, SqliteSchoolAccountRepository, SchoolAccountRepository};
-use crate::db::csv_import::{ExistingAccountInfo, CsvValidator};
+use crate::csv_commands::{ExistingAccountInfo};
 use crate::db::csv_transform::{CsvTransformer, TransformError};
 
 #[derive(Debug)]
@@ -50,6 +50,7 @@ impl ParallelCsvProcessor {
         records: Vec<StringRecord>,
         headers: StringRecord,
         existing_accounts: Vec<ExistingAccountInfo>,
+        last_updated_semester_id: Option<Uuid>
     ) -> ProcessingResult {
         let (work_sender, work_receiver) = bounded::<WorkItem>(self.num_workers * 2);
         let (result_sender, result_receiver) = bounded(self.num_workers * 2);
@@ -66,10 +67,25 @@ impl ParallelCsvProcessor {
 
         // Create a mapping of school_ids to existing accounts for faster lookup
         let existing_accounts_map: std::collections::HashMap<String, ExistingAccountInfo> = 
-            existing_accounts.into_iter()
-                .map(|acc| (acc.school_id.clone(), acc))
-                .collect();
-
+        existing_accounts.clone()  // Use the existing_accounts directly
+            .into_iter()
+            .map(|info| {
+                // Clone existing_accounts before processing
+                let cloned_accounts = info.existing_accounts.clone();
+                
+                // Create a map of school_ids to existing accounts
+                let school_id_map: std::collections::HashMap<String, SchoolAccount> = 
+                    cloned_accounts.iter().cloned()
+                        .map(|acc| (acc.school_id.clone(), acc))
+                        .collect();
+                
+                (cloned_accounts.first()
+                    .map(|acc| acc.school_id.clone())
+                    .unwrap_or_default(), 
+                info)
+            })
+            .collect();
+        
         let db_path = self.db_path.clone();
         let headers = Arc::new(headers);
 
@@ -85,16 +101,22 @@ impl ParallelCsvProcessor {
 
                     for record in chunk {
                         match transformer.transform_record(record) {
-                            Ok(create_request) => {
-                                let work_item = if let Some(existing) = existing_accounts_map.get(&create_request.school_id) {
-                                    WorkItem::Update(
-                                        Uuid::parse_str(&existing.existing_id).unwrap(),
-                                        create_request
-                                    )
-                                } else {
-                                    WorkItem::Create(create_request)
+                            Ok(mut create_request) => {
+                                // Add semester_id to the create_request if provided
+                                if let Some(last_updated_semester_id) = last_updated_semester_id {
+                                    create_request.last_updated_semester_id = Some(last_updated_semester_id);
+                                }
+            
+                                let work_item = {
+                                    let existing_match = existing_accounts_map.get(&create_request.school_id)
+                                        .and_then(|existing| existing.existing_accounts.first());
+                                    
+                                    match existing_match {
+                                        Some(account) => WorkItem::Update(account.id, create_request.clone()),
+                                        None => WorkItem::Create(create_request)
+                                    }
                                 };
-
+            
                                 if sender.send(work_item).is_err() {
                                     errors.lock().unwrap().push("Failed to send work item".to_string());
                                 }
@@ -210,7 +232,8 @@ pub fn process_csv_with_progress<F>(
     records: Vec<StringRecord>,
     headers: StringRecord,
     existing_accounts: Vec<ExistingAccountInfo>,
-    progress_callback: F
+    progress_callback: F,
+    last_updated_semester_id: Option<Uuid>  // Add last_updated_semester_id parameter
 ) -> ProcessingResult 
 where
     F: Fn(f32) + Send + 'static
@@ -227,7 +250,8 @@ where
         let result = processor.process_csv_data(
             chunk.to_vec(),
             headers.clone(),
-            existing_accounts.clone()
+            existing_accounts.clone(),
+            last_updated_semester_id
         );
 
         overall_result.successful += result.successful;
