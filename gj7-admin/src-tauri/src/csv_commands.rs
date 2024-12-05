@@ -264,15 +264,50 @@ pub async fn import_csv_file(
                                     account_request.clone().into()
                                 ) {
                                     Ok(updated_account) => {
+                                        // Emit a log message for successful update
+                                        emit_log(&app_handle, LogMessage {
+                                            timestamp: chrono::Utc::now().to_rfc3339(),
+                                            level: "INFO".to_string(),
+                                            message: format!(
+                                                "Successfully updated school account: ID={}, SchoolID={}",
+                                                updated_account.id,
+                                                updated_account.school_id
+                                            ),
+                                            target: "csv_import".to_string(),
+                                        });
+                                        
                                         successful_imports += 1;
                                         existing_accounts.push(updated_account);
                                     },
                                     Err(e) => {
+                                        // Emit a log message for update failure
+                                        emit_log(&app_handle, LogMessage {
+                                            timestamp: chrono::Utc::now().to_rfc3339(),
+                                            level: "ERROR".to_string(),
+                                            message: format!(
+                                                "Failed to update school account: SchoolID={}, Error={}",
+                                                account_request.school_id,
+                                                e
+                                            ),
+                                            target: "csv_import".to_string(),
+                                        });
+                                        
                                         failed_imports += 1;
                                         error_details.push(format!("Update failed for {}: {}", account_request.school_id, e));
                                     }
                                 }
                             } else {
+                                // Emit a log message for skipped update
+                                emit_log(&app_handle, LogMessage {
+                                    timestamp: chrono::Utc::now().to_rfc3339(),
+                                    level: "WARN".to_string(),
+                                    message: format!(
+                                        "Skipped updating existing account: SchoolID={}",
+                                        account_request.school_id
+                                    ),
+                                    target: "csv_import".to_string(),
+                                });
+                                
                                 // Skip if not forced to update
                                 failed_imports += 1;
                                 error_details.push(format!("Account with school_id {} already exists", account_request.school_id));
@@ -280,18 +315,16 @@ pub async fn import_csv_file(
                         },
                         Err(_) => {
                             // Account doesn't exist, create new
-                            // Inside import_csv_file function
                             match state.0.school_accounts.create_school_account(&conn, account_request.clone()) {
                                 Ok(new_account) => {
-                                    // Emit a log message for each successful account creation
+                                    // Emit a log message for successful account creation
                                     emit_log(&app_handle, LogMessage {
                                         timestamp: chrono::Utc::now().to_rfc3339(),
                                         level: "INFO".to_string(),
                                         message: format!(
-                                            "Created school account: SchoolID={}, Name={} {}",
-                                            new_account.school_id,
-                                            new_account.first_name.clone().unwrap_or_default(),
-                                            new_account.last_name.clone().unwrap_or_default()
+                                            "Successfully created school account: ID={}, SchoolID={}",
+                                            new_account.id,
+                                            new_account.school_id
                                         ),
                                         target: "csv_import".to_string(),
                                     });
@@ -305,7 +338,7 @@ pub async fn import_csv_file(
                                         level: "ERROR".to_string(),
                                         message: format!(
                                             "Failed to create school account: SchoolID={}, Error={}",
-                                            account_request.school_id, // This can now be used
+                                            account_request.school_id,
                                             e
                                         ),
                                         target: "csv_import".to_string(),

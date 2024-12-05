@@ -349,8 +349,6 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </>
           )}
 
-
-
           {validationResult && !validationResult.is_valid && (
             <>
               {validationResult.validation_errors.some(err => err.row_number === 0) && (
@@ -362,46 +360,45 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </>
           )}
 
-{isShowingImportLoadingState && (
-  <Card className="mt-4 bg-black">
-  <CardHeader>
-    <CardTitle className="matrix-title">Import Logs</CardTitle>
-  </CardHeader>
-  <CardContent>
-    <ScrollArea className="h-[300px] w-full rounded-md matrix-scroll-area">
-      {logMessages
-        .slice()
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-        .map((log, index) => (
-          <div 
-            key={index} 
-            className={`mb-2 p-2 rounded matrix-log-entry ${
-              log.level === 'error' 
-                ? 'matrix-log-error' 
-                : log.level === 'warn' 
-                ? 'matrix-log-warn'
-                : 'matrix-log-info'
-            } matrix-font matrix-fade-in`}
-          >
-            <div className="flex justify-between text-xs">
-              <span>{log.timestamp}</span>
-              <span className="font-bold uppercase">
-                {log.level}
-              </span>
-            </div>
-            <div className="mt-1 text-sm">{log.message}</div>
-          </div>
-        ))}
-      {logMessages.length === 0 && (
-        <div className="text-center matrix-initializing matrix-font">
-          Initializing system...
-        </div>
-      )}
-    </ScrollArea>
-  </CardContent>
-</Card>
-
-)}
+          {isShowingImportLoadingState && (
+            <Card className="mt-4 bg-black">
+            <CardHeader>
+              <CardTitle className="matrix-title">Import Logs</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[300px] w-full rounded-md matrix-scroll-area">
+                {logMessages
+                  .slice()
+                  .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                  .map((log, index) => (
+                    <div 
+                      key={index} 
+                      className={`mb-2 p-2 rounded matrix-log-entry ${
+                        log.level === 'error' 
+                          ? 'matrix-log-error' 
+                          : log.level === 'warn' 
+                          ? 'matrix-log-warn'
+                          : 'matrix-log-info'
+                      } matrix-font matrix-fade-in`}
+                    >
+                      <div className="flex justify-between text-xs">
+                        <span>{log.timestamp}</span>
+                        <span className="font-bold uppercase">
+                          {log.level}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-sm">{log.message}</div>
+                    </div>
+                  ))}
+                {logMessages.length === 0 && (
+                  <div className="text-center matrix-initializing matrix-font">
+                    Initializing system...
+                  </div>
+                )}
+              </ScrollArea>
+            </CardContent>
+          </Card>
+          )}
 
 
           {showStatistics && importResult && importResult.account_status_counts && (

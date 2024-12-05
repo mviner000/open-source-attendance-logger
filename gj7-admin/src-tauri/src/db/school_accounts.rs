@@ -188,24 +188,6 @@ impl From<CreateSchoolAccountRequest> for UpdateSchoolAccountRequest {
 
 // Implement the repository for a specific database type (e.g., SQLite)
 impl SchoolAccountRepository for SqliteSchoolAccountRepository {
-    fn get_account_status_counts(&self, conn: &Connection) -> Result<AccountStatusCounts> {
-        let active_count: u64 = conn.query_row(
-            "SELECT COUNT(*) FROM school_accounts WHERE is_active = 1",
-            [],
-            |row| row.get(0)
-        )?;
-
-        let inactive_count: u64 = conn.query_row(
-            "SELECT COUNT(*) FROM school_accounts WHERE is_active = 0",
-            [],
-            |row| row.get(0)
-        )?;
-
-        Ok(AccountStatusCounts {
-            active_count,
-            inactive_count,
-        })
-    }
 
     fn create_school_account(&self, conn: &Connection, account: CreateSchoolAccountRequest) -> Result<SchoolAccount> {
         info!("Creating new school account with school_id: {}", account.school_id);
@@ -277,6 +259,73 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
                 Err(e)
             }
         }
+    }
+
+    fn update_school_account(&self, conn: &Connection, id: Uuid, account: UpdateSchoolAccountRequest) -> Result<SchoolAccount> {
+        conn.execute(
+            "UPDATE school_accounts SET 
+                first_name = COALESCE(?1, first_name), 
+                middle_name = COALESCE(?2, middle_name), 
+                last_name = COALESCE(?3, last_name), 
+                gender = COALESCE(?4, gender), 
+                course = COALESCE(?5, course), 
+                department = COALESCE(?6, department), 
+                position = COALESCE(?7, position), 
+                major = COALESCE(?8, major), 
+                year_level = COALESCE(?9, year_level),
+                is_active = COALESCE(?10, is_active),
+                last_updated_semester_id = COALESCE(?11, last_updated_semester_id)
+            WHERE id = ?12",
+            params![
+                account.first_name, 
+                account.middle_name, 
+                account.last_name,
+                account.gender.map(|g| match g {
+                    Gender::Male => 0,
+                    Gender::Female => 1,
+                    Gender::Other => 2
+                }), 
+                account.course, 
+                account.department, 
+                account.position, 
+                account.major, 
+                account.year_level,
+                account.is_active,
+                account.last_updated_semester_id.map(|id| id.to_string()),
+                id.to_string()
+            ],
+        )?;
+    
+        // Retrieve the updated account
+        let updated_account = self.get_school_account(conn, id)?;
+        
+        // Log successful update
+        info!(
+            "Successfully updated school account: ID={}, SchoolID={}",
+            updated_account.id,
+            updated_account.school_id
+        );
+    
+        Ok(updated_account)
+    }
+    
+    fn get_account_status_counts(&self, conn: &Connection) -> Result<AccountStatusCounts> {
+        let active_count: u64 = conn.query_row(
+            "SELECT COUNT(*) FROM school_accounts WHERE is_active = 1",
+            [],
+            |row| row.get(0)
+        )?;
+
+        let inactive_count: u64 = conn.query_row(
+            "SELECT COUNT(*) FROM school_accounts WHERE is_active = 0",
+            [],
+            |row| row.get(0)
+        )?;
+
+        Ok(AccountStatusCounts {
+            active_count,
+            inactive_count,
+        })
     }
 
     fn get_paginated_school_accounts(
@@ -454,54 +503,6 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
         )?;
 
         Ok(account)
-    }
-
-    fn update_school_account(&self, conn: &Connection, id: Uuid, account: UpdateSchoolAccountRequest) -> Result<SchoolAccount> {
-        conn.execute(
-            "UPDATE school_accounts SET 
-                first_name = COALESCE(?1, first_name), 
-                middle_name = COALESCE(?2, middle_name), 
-                last_name = COALESCE(?3, last_name), 
-                gender = COALESCE(?4, gender), 
-                course = COALESCE(?5, course), 
-                department = COALESCE(?6, department), 
-                position = COALESCE(?7, position), 
-                major = COALESCE(?8, major), 
-                year_level = COALESCE(?9, year_level),
-                is_active = COALESCE(?10, is_active),
-                last_updated_semester_id = COALESCE(?11, last_updated_semester_id)
-            WHERE id = ?12",
-            params![
-                account.first_name, 
-                account.middle_name, 
-                account.last_name,
-                account.gender.map(|g| match g {
-                    Gender::Male => 0,
-                    Gender::Female => 1,
-                    Gender::Other => 2
-                }), 
-                account.course, 
-                account.department, 
-                account.position, 
-                account.major, 
-                account.year_level,
-                account.is_active,
-                account.last_updated_semester_id.map(|id| id.to_string()),
-                id.to_string()
-            ],
-        )?;
-    
-        // Retrieve the updated account
-        let updated_account = self.get_school_account(conn, id)?;
-        
-        // Log successful update
-        info!(
-            "Successfully updated school account: ID={}, SchoolID={}",
-            updated_account.id,
-            updated_account.school_id
-        );
-    
-        Ok(updated_account)
     }
 
     fn delete_school_account(&self, conn: &Connection, id: Uuid) -> Result<()> {
