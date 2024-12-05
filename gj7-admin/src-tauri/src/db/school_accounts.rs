@@ -492,7 +492,16 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
         )?;
     
         // Retrieve the updated account
-        self.get_school_account(conn, id)
+        let updated_account = self.get_school_account(conn, id)?;
+        
+        // Log successful update
+        info!(
+            "Successfully updated school account: ID={}, SchoolID={}",
+            updated_account.id,
+            updated_account.school_id
+        );
+    
+        Ok(updated_account)
     }
 
     fn delete_school_account(&self, conn: &Connection, id: Uuid) -> Result<()> {

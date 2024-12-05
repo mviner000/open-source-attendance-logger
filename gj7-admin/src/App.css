@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -110,3 +112,78 @@
     @apply bg-background text-foreground;
   }
 }
+
+
+/* for logging messages in csv import */
+
+.matrix-font {
+  font-family: 'VT323', monospace;
+}
+
+.matrix-title {
+  color: #00ff00;
+}
+
+.matrix-scroll-area {
+  background-color: black;
+  border-color: #00ff00;
+  border-width: 1px;
+  padding: 1rem;
+}
+
+.matrix-log-entry {
+  border-width: 1px;
+}
+
+.matrix-log-info {
+  border-color: #00ff00;
+  color: #00ff00;
+}
+
+.matrix-log-warn {
+  border-color: #ffff00;
+  color: #ffff00;
+}
+
+.matrix-log-error {
+  border-color: #ff0000;
+  color: #ff0000;
+}
+
+.matrix-initializing {
+  color: #00ff00;
+  font-style: italic;
+}
+
+@keyframes matrix-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.matrix-fade-in {
+  animation: matrix-fade-in 0.5s ease-in-out;
+}
+
+/* Add a subtle glow effect to the text */
+.matrix-log-info, .matrix-log-error, .matrix-log-warn {
+  text-shadow: 0 0 5px currentColor;
+}
+
+/* Add a scanline effect */
+.matrix-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(18, 16, 16, 0) 50%,
+    rgba(0, 0, 0, 0.25) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 1;
+}
+

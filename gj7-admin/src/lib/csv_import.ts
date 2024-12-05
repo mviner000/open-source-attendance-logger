@@ -1,9 +1,17 @@
 // lib/csv_import.ts
 
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { logger } from './logger';
 import { Uuid } from '@/types/uuid';
 import { SchoolAccount } from './school_accounts';
+
+export interface LogMessage {
+  timestamp: string;
+  level: string;
+  message: string;
+  target: string;
+}
 
 export interface ValidationErrorDetails {
   row_number: number;
@@ -63,6 +71,7 @@ export interface CsvImportResponse {
   existing_account_info?: ExistingAccountInfo;
   import_summary?: ImportSummary;
   account_status_counts?: AccountStatusCounts;
+  logMessages?: LogMessage[];
 }
 
 export interface CsvImportRequest {
@@ -73,6 +82,16 @@ export interface CsvImportRequest {
 }
 
 export const CsvImportApi = {
+  logMessageListeners: [] as ((message: LogMessage) => void)[],
+
+  registerLogMessageListener(listener: (message: LogMessage) => void) {
+    this.logMessageListeners.push(listener);
+  },
+
+  removeLogMessageListener(listener: (message: LogMessage) => void) {
+    this.logMessageListeners = this.logMessageListeners.filter(l => l !== listener);
+  },
+
   async validateCsvFile(filePath: string): Promise<CsvValidationResult> {
     try {
       logger.log(`Validating CSV file: ${filePath}`, 'info');
@@ -150,6 +169,23 @@ export const CsvImportApi = {
   },
 
   async importCsvFile(request: CsvImportRequest): Promise<CsvImportResponse> {
+    // Create a list to collect log messages
+    const logMessages: LogMessage[] = [];
+
+    // Setup log listener before invoking
+    const unlisten = await listen<LogMessage>('log-message', (event) => {
+      const logMessage = event.payload;
+      
+      // Dispatch to console
+      console.log('Backend Log:', logMessage);
+      
+      // Add to local log messages
+      logMessages.push(logMessage);
+      
+      // Notify all registered listeners
+      this.logMessageListeners.forEach(listener => listener(logMessage));
+    });
+
     try {
       const startTime = Date.now();
       logger.log(`Importing CSV file: ${request.file_path}`, 'info');
@@ -207,8 +243,18 @@ export const CsvImportApi = {
         });
       }
 
-      return importResponse;
+      // Unlisten to prevent memory leaks
+      unlisten();
+
+      return {
+        ...importResponse,
+        // Attach collected log messages to the response if needed
+        logMessages
+      };
     } catch (error) {
+      // Unlisten in case of error
+      unlisten();
+      
       logger.log(`CSV import failed: ${error}`, 'error');
       throw error;
     }

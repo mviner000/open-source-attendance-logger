@@ -13,6 +13,7 @@ mod purpose_commands;
 mod attendance_commands;
 mod network_server;
 mod websocket;
+mod logger;
 
 use tauri::Manager;
 use tauri::Emitter;

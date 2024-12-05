@@ -1,20 +1,23 @@
 // CsvImportComponent.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
-import { CsvImportApi, CsvValidationResult, CsvImportResponse } from '../lib/csv_import';
+import { CsvImportApi, CsvValidationResult, CsvImportResponse, LogMessage } from '../lib/csv_import';
 import { Semester } from '../lib/semester';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from "@/components/ui/progress";
-import { FileSpreadsheet, AlertCircle, CheckCircle, FileUp, ClipboardCheck, Upload, Check, MoveRight } from 'lucide-react';
+import { FileSpreadsheet, AlertCircle, CheckCircle, FileUp, ClipboardCheck, Upload, Check, MoveRight, MessageCircle } from 'lucide-react';
 import { CsvHeaderValidationErrors } from './CsvHeaderValidationErrors';
 import CsvContentValidationErrors from './CsvContentValidationErrors';
 import { SchoolAccount } from '@/lib/school_accounts';
 import ImportLoadingState from './ImportLoadingState';
-import SemesterSelection from './SemesterSelection'; // Import the new component
+import SemesterSelection from './SemesterSelection';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface CsvImportComponentProps {
   onImportSuccess: () => void;
@@ -50,6 +53,23 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
   const [showImportSection, setShowImportSection] = useState(true);
   const [isFileImported, setIsFileImported] = useState(false);
   const [isShowingImportLoadingState, setIsShowingImportLoadingState] = useState(false);
+  const [logMessages, setLogMessages] = useState<LogMessage[]>([]);
+  const [logListener, setLogListener] = useState<UnlistenFn | null>(null);
+  const [activeTab, setActiveTab] = useState<'statistics' | 'logs'>('statistics');
+
+  // Create a callback to handle log messages
+  const handleLogMessage = useCallback((message: LogMessage) => {
+    setLogMessages(prevMessages => {
+      // Prevent duplicate messages
+      const isDuplicate = prevMessages.some(
+        m => m.timestamp === message.timestamp && 
+              m.message === message.message && 
+              m.level === message.level
+      );
+      
+      return isDuplicate ? prevMessages : [...prevMessages, message];
+    });
+  }, []);
 
   const handleFileSelect = async () => {
     try {
@@ -75,6 +95,43 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
     }
   };
 
+  // Set up log message listener when importing
+  useEffect(() => {
+    let unlistenFn: UnlistenFn | null = null;
+
+    const setupLogListener = async () => {
+      try {
+        // Remove any existing listener first
+        if (logListener) {
+          logListener();
+        }
+
+        // Set up new listener for log messages
+        unlistenFn = await listen<LogMessage>('log-message', (event) => {
+          handleLogMessage(event.payload);
+        });
+
+        // Save the unlisten function
+        setLogListener(() => unlistenFn);
+      } catch (error) {
+        console.error('Failed to set up log listener:', error);
+      }
+    };
+
+    // Only set up listener during import process
+    if (isImporting || isShowingImportLoadingState) {
+      setupLogListener();
+    }
+
+    // Cleanup function
+    return () => {
+      if (unlistenFn) {
+        unlistenFn();
+      }
+    };
+  }, [isImporting, isShowingImportLoadingState, handleLogMessage]);
+
+
   const resetState = () => {
     setError(null);
     setValidationResult(null);
@@ -87,6 +144,13 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
     setShowExistingAccountInfo(true);
     setShowImportSection(true);
     setIsFileImported(false);
+    setLogMessages([]);
+
+    // Remove existing log listener if it exists
+    if (logListener) {
+      logListener();
+      setLogListener(null);
+    }
   };
 
   const handleSemesterSelect = (semester: Semester) => {
@@ -126,6 +190,13 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
     setIsImporting(true);
     setError(null);
     setShowUpdateConfirmation(false);
+    setLogMessages([]); // Clear previous log messages
+
+    // Create log message listener
+    const logListener = (message: LogMessage) => {
+      setLogMessages(prev => [...prev, message]);
+    };
+    CsvImportApi.registerLogMessageListener(logListener);
 
     try {
       if (forceUpdate) {
@@ -144,6 +215,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
       setShowStatistics(true);
       setCurrentStep(3);
       setIsFileImported(true);
+      setActiveTab('statistics');
 
       return result;
     } catch (err) {
@@ -151,6 +223,8 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
       setError(err instanceof Error ? err.message : 'Import failed');
     } finally {
       setIsImporting(false);
+      // Remove the log listener
+      CsvImportApi.removeLogMessageListener(logListener);
     }
   };
 
@@ -171,6 +245,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
   };
 
   const shouldShowCancelButton = (fullFilePath || isFileImported || existingAccountInfo) && !showStatistics;
+  
 
   return (
     <Card className="w-full max-w-4xl">
@@ -274,6 +349,8 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </>
           )}
 
+
+
           {validationResult && !validationResult.is_valid && (
             <>
               {validationResult.validation_errors.some(err => err.row_number === 0) && (
@@ -284,6 +361,48 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
               )}
             </>
           )}
+
+{isShowingImportLoadingState && (
+  <Card className="mt-4 bg-black">
+  <CardHeader>
+    <CardTitle className="matrix-title">Import Logs</CardTitle>
+  </CardHeader>
+  <CardContent>
+    <ScrollArea className="h-[300px] w-full rounded-md matrix-scroll-area">
+      {logMessages
+        .slice()
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .map((log, index) => (
+          <div 
+            key={index} 
+            className={`mb-2 p-2 rounded matrix-log-entry ${
+              log.level === 'error' 
+                ? 'matrix-log-error' 
+                : log.level === 'warn' 
+                ? 'matrix-log-warn'
+                : 'matrix-log-info'
+            } matrix-font matrix-fade-in`}
+          >
+            <div className="flex justify-between text-xs">
+              <span>{log.timestamp}</span>
+              <span className="font-bold uppercase">
+                {log.level}
+              </span>
+            </div>
+            <div className="mt-1 text-sm">{log.message}</div>
+          </div>
+        ))}
+      {logMessages.length === 0 && (
+        <div className="text-center matrix-initializing matrix-font">
+          Initializing system...
+        </div>
+      )}
+    </ScrollArea>
+  </CardContent>
+</Card>
+
+)}
+
 
           {showStatistics && importResult && importResult.account_status_counts && (
             <Alert variant="default" className="bg-green-50 border-green-300 p-4">

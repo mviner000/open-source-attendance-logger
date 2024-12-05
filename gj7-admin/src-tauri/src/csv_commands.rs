@@ -6,6 +6,7 @@ use crate::DbState;
 use crate::db::csv_import::{CsvValidator, CsvValidationResult};
 use crate::db::csv_transform::{CsvTransformer, batch_transform_records};
 use crate::db::school_accounts::{SchoolAccount, CreateSchoolAccountRequest};
+use crate::logger::{emit_log, LogMessage};
 use csv::StringRecord;
 use log::{info, error};
 
@@ -37,13 +38,6 @@ pub struct CsvImportResponse {
     account_status_counts: Option<AccountStatusCounts>, // New field
 
 }
-
-
-// #[derive(serde::Deserialize)]
-// pub struct CsvImportRequest {
-//     pub file_path: String,
-//     pub semester_id: Uuid,
-// }
 
 #[derive(serde::Serialize, Debug)]
 pub struct ValidationErrorDetails {
@@ -163,6 +157,7 @@ pub async fn validate_csv_file(
 
 #[command]
 pub async fn import_csv_file(
+    app_handle: tauri::AppHandle,
     state: State<'_, DbState>,
     file_path: String,
     semester_id: Uuid,
@@ -233,6 +228,14 @@ pub async fn import_csv_file(
     let mut failed_imports = 0;
     let mut error_details = Vec::new();
     let mut existing_accounts = Vec::new();
+
+    // new implementation for reference
+    emit_log(&app_handle, LogMessage {
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        level: "INFO".to_string(),
+        message: format!("Importing CSV file: {}", file_path),
+        target: "csv_import".to_string(),
+    });
     
     // Perform import for each batch
     for batch in batched_records {
@@ -277,11 +280,37 @@ pub async fn import_csv_file(
                         },
                         Err(_) => {
                             // Account doesn't exist, create new
-                            match state.0.school_accounts.create_school_account(&conn, account_request) {
+                            // Inside import_csv_file function
+                            match state.0.school_accounts.create_school_account(&conn, account_request.clone()) {
                                 Ok(new_account) => {
+                                    // Emit a log message for each successful account creation
+                                    emit_log(&app_handle, LogMessage {
+                                        timestamp: chrono::Utc::now().to_rfc3339(),
+                                        level: "INFO".to_string(),
+                                        message: format!(
+                                            "Created school account: SchoolID={}, Name={} {}",
+                                            new_account.school_id,
+                                            new_account.first_name.clone().unwrap_or_default(),
+                                            new_account.last_name.clone().unwrap_or_default()
+                                        ),
+                                        target: "csv_import".to_string(),
+                                    });
+                                    
                                     successful_imports += 1;
                                 },
                                 Err(e) => {
+                                    // Emit a log message for failed account creation
+                                    emit_log(&app_handle, LogMessage {
+                                        timestamp: chrono::Utc::now().to_rfc3339(),
+                                        level: "ERROR".to_string(),
+                                        message: format!(
+                                            "Failed to create school account: SchoolID={}, Error={}",
+                                            account_request.school_id, // This can now be used
+                                            e
+                                        ),
+                                        target: "csv_import".to_string(),
+                                    });
+                                    
                                     failed_imports += 1;
                                     error_details.push(format!("Import failed: {}", e));
                                 }
