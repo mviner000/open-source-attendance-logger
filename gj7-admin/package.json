@@ -41,6 +41,7 @@
     "date-fns": "^4.1.0",
     "framer-motion": "^11.13.1",
     "html2canvas": "^1.4.1",
+    "input-otp": "^1.4.1",
     "jspdf": "^2.5.2",
     "lucide-react": "^0.460.0",
     "papaparse": "^5.4.1",

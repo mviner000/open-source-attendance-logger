@@ -20,6 +20,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from '@/hooks/use-toast';
+import PinCodeModal from './PinCodeModal';
 
 interface CsvImportComponentProps {
   onImportSuccess: () => void;
@@ -47,6 +48,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
   const [existingAccountInfo, setExistingAccountInfo] = useState<ExistingAccountInfo | null>(null);
   const [importResult, setImportResult] = useState<CsvImportResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showCreateConfirmation, setShowCreateConfirmation] = useState(false);
   const [showUpdateConfirmation, setShowUpdateConfirmation] = useState(false);
   const [selectedSemester, setSelectedSemester] = useState<Semester | null>(null);
   const [showStatistics, setShowStatistics] = useState(false);
@@ -58,6 +60,11 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
   const [logMessages, setLogMessages] = useState<LogMessage[]>([]);
   const [logListener, setLogListener] = useState<UnlistenFn | null>(null);
   const [useParallelImport, setUseParallelImport] = useState(false);
+  const [showPinCodeModal, setShowPinCodeModal] = useState(false);
+  const [pinAttempts, setPinAttempts] = useState(3);
+  const [parallelImportLocked, setParallelImportLocked] = useState(false);
+  const [remainingLockTime, setRemainingLockTime] = useState(0);
+
 
   const handleLogMessage = useCallback((message: LogMessage) => {
     setLogMessages(prevMessages => {
@@ -233,7 +240,7 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
     if (existingAccountCount > 0) {
       setShowUpdateConfirmation(true);
     } else {
-      importFile(false);
+      setShowCreateConfirmation(true);
     }
   };
 
@@ -242,6 +249,52 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
   };
 
   const shouldShowCancelButton = (fullFilePath || isFileImported || existingAccountInfo) && !showStatistics;
+
+  const handleParallelImportToggle = () => {
+    if (!useParallelImport && !parallelImportLocked) {
+      setShowPinCodeModal(true);
+    } else if (useParallelImport) {
+      setUseParallelImport(false);
+    }
+  };
+
+
+  const handlePinVerification = (success: boolean) => {
+    if (success) {
+      setUseParallelImport(true);
+      setShowPinCodeModal(false);
+      setPinAttempts(3);
+    } else {
+      setPinAttempts((prev) => {
+        if (prev === 1) {
+          setParallelImportLocked(true);
+          setRemainingLockTime(15 * 60); // 15 minutes in seconds
+          setUseParallelImport(false);
+          setShowPinCodeModal(false);
+          return 3;
+        }
+        return prev - 1;
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (parallelImportLocked) {
+      const interval = setInterval(() => {
+        setRemainingLockTime((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            setParallelImportLocked(false);
+            setPinAttempts(3);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [parallelImportLocked]);
 
   return (
     <Card className="w-full max-w-4xl">
@@ -319,40 +372,38 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </div>
           )}
 
-          {validationResult?.is_valid && showImportSection && !isShowingImportLoadingState && !showStatistics && (
+          <PinCodeModal
+              isOpen={showPinCodeModal}
+              onClose={() => setShowPinCodeModal(false)}
+              onVerify={handlePinVerification}
+              attemptsRemaining={pinAttempts}
+              locked={parallelImportLocked}
+              remainingTime={remainingLockTime}
+            />
+
+          {validationResult?.is_valid && showImportSection && !isShowingImportLoadingState && !showStatistics && !showUpdateConfirmation && !showCreateConfirmation && (
             <>
-              <div className="space-y-2">
-                <SemesterSelection 
-                  onSemesterSelect={handleSemesterSelect}
-                />
-              </div>
+                <div className="space-y-2">
+                  <SemesterSelection 
+                    onSemesterSelect={handleSemesterSelect}
+                  />
+                </div>
 
-              <div className="flex items-center space-x-2 mt-4">
-                <Switch
-                  id="import-method"
-                  checked={useParallelImport}
-                  onCheckedChange={setUseParallelImport}
-                />
-                <Label htmlFor="import-method">
-                  Use parallel import {useParallelImport ? '(Faster, but may have higher resource usage)' : '(Default)'}
-                </Label>
-              </div>
-
-              {selectedSemester && (
-               <div className="flex justify-end items-center">
-                <Button 
-                  onClick={handleImportClick} 
-                  disabled={isImporting}
-                  variant="amber3d"
-                  className="flex items-center justify-center gap-2 pl-4"
-                >
-                  <MoveRight className="w-4 h-4" />
-                  <span className='mt-1'>
-                  {isImporting ? 'Processing...' : 'Continue'}
-                  </span>
-                </Button>
-              </div>
-            )}
+                {selectedSemester && (
+                <div className="flex justify-end items-center">
+                  <Button 
+                    onClick={handleImportClick} 
+                    disabled={isImporting}
+                    variant="amber3d"
+                    className="flex items-center justify-center gap-2 pl-4"
+                  >
+                    <MoveRight className="w-4 h-4" />
+                    <span className='mt-1'>
+                    {isImporting ? 'Processing...' : 'Continue'}
+                    </span>
+                  </Button>
+                </div>
+                )}
             </>
           )}
 
@@ -518,6 +569,67 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             </Button>
           )}
 
+          <Dialog 
+            open={showCreateConfirmation} 
+            onOpenChange={(open) => setShowCreateConfirmation(open)}
+          >
+            <DialogContent className="bg-white shadow-2xl border-2 border-green-100">
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-bold text-green-800 flex items-center">
+                  Confirm Account Creation
+                </DialogTitle>
+                
+                <DialogDescription className="space-y-4 text-gray-700">
+                  <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
+                    <p>You are about to create <span className="font-bold text-green-700 text-2xl">{existingAccountInfo?.new_accounts_count ?? 0}</span> new accounts.</p>
+                  </div>
+                  <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
+                    <p className="font-bold text-yellow-700 flex items-center">
+                      <AlertCircle className="w-5 h-5 mr-2" />
+                      This will add new accounts to the system
+                    </p>
+                  </div>
+                  <p className="text-gray-600 italic">Are you sure you want to proceed with creating these accounts?</p>
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="flex space-x-2 justify-between">
+                <div className="mt-2 relative text-left w-full space-x-2">
+                    <Switch
+                      id="import-method"
+                      checked={useParallelImport}
+                      onCheckedChange={handleParallelImportToggle}
+                      disabled={parallelImportLocked}
+                    />
+                    <div className='text-xs absolute bottom-[1px] -left-2'>
+                      {useParallelImport ? '(Faster)' : ''} Switch to Pro
+                    </div>
+                </div>
+                <div className='flex space-x-2'>
+                  <Button
+                    variant="outlineAmber3d"
+                    onClick={() => setShowCreateConfirmation(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="green3d"
+                    className='flex items-center'
+                    onClick={async () => {
+                      setShowCreateConfirmation(false);
+                      const result = await importFile(false);
+                      if (result && result.failed_imports === 0) {
+                        setShowStatistics(true);
+                      }
+                    }}
+                  >
+                    <Check className="w-4 h-4" />
+                    <span className='mt-1 -ml-1'>Create Accounts</span>
+                  </Button>
+                </div>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
           <Dialog open={showUpdateConfirmation}  onOpenChange={(open) => {
             setShowUpdateConfirmation(open);
             setShowExistingAccountInfo(open);
@@ -525,8 +637,9 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
             <DialogContent className="bg-white shadow-2xl border-2 border-green-100">
               <DialogHeader>
                 <DialogTitle className="text-2xl font-bold text-green-800 flex items-center">
-                  Confirm Account Update
+                  Confirm Account Update 
                 </DialogTitle>
+                
                 <DialogDescription className="space-y-4 text-gray-700">
                   <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
                     <ul className="list-disc list-inside text-yellow-900 space-y-1">
@@ -545,31 +658,45 @@ export const CsvImportComponent: React.FC<CsvImportComponentProps> = ({ onImport
                     </p>
                   </div>
                   <p className="text-gray-600 italic">Are you sure you want to proceed with this update?</p>
+                  
                 </DialogDescription>
               </DialogHeader>
-              <DialogFooter className="flex space-x-2">
-                <Button
-                  variant="outlineAmber3d"
-                  onClick={() => setShowUpdateConfirmation(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="green3d"
-                  className='flex items-center'
-                  onClick={async () => {
-                    setShowExistingAccountInfo(false);
-                    setShowImportSection(false);
-                    const result = await importFile(true);
-                    if (result && result.failed_imports === 0) {
-                      setShowStatistics(true);
-                      setShowUpdateConfirmation(false);
-                    }
-                  }}
-                >
-                  <Check className="w-4 h-4" />
-                  <span className='mt-1 -ml-1'>Continue with Update</span>
-                </Button>
+              <DialogFooter className="flex space-x-2 justify-between">
+                <div className="mt-2 relative text-left w-full space-x-2">
+                  <Switch
+                    id="import-method"
+                    checked={useParallelImport}
+                    onCheckedChange={handleParallelImportToggle}
+                    disabled={parallelImportLocked}
+                  />
+                  <div className='text-xs absolute bottom-[1px] -left-2'>
+                    {useParallelImport ? '(Faster)' : ''} Switch to Pro
+                  </div>
+                </div>
+                <div className='flex space-x-2'>
+                  <Button
+                    variant="outlineAmber3d"
+                    onClick={() => setShowUpdateConfirmation(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="green3d"
+                    className='flex items-center'
+                    onClick={async () => {
+                      setShowExistingAccountInfo(false);
+                      setShowImportSection(false);
+                      const result = await importFile(true);
+                      if (result && result.failed_imports === 0) {
+                        setShowStatistics(true);
+                        setShowUpdateConfirmation(false);
+                      }
+                    }}
+                  >
+                    <Check className="w-4 h-4" />
+                    <span className='mt-1 -ml-1'>Continue with Update</span>
+                  </Button>
+                </div>
               </DialogFooter>
             </DialogContent>
           </Dialog>
