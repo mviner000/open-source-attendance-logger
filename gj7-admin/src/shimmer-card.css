@@ -1,0 +1,48 @@
+.shimmer-wrapper {
+    position: relative;
+    padding: 2px;
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+  
+  .shimmer-border {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    right: -50%;
+    bottom: -50%;
+    background: conic-gradient(
+      from 90deg at 50% 50%,
+      #E9D5FF 0deg,
+      #818CF8 72deg,
+      #6EE7B7 144deg,
+      #9333EA 216deg,
+      #E9D5FF 360deg
+    );
+    animation: rotate 4s linear infinite;
+  }
+  
+  .shimmer-wrapper::after {
+    content: "";
+    position: absolute;
+    background: white;
+    inset: 2px;
+    border-radius: 0.5rem;
+  }
+  
+  @keyframes rotate {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  
+  /* Ensure the card content is above the shimmer effect */
+  .shimmer-wrapper > .card {
+    position: relative;
+    z-index: 1;
+  }
+  
+  

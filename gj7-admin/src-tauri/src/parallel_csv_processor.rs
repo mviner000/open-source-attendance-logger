@@ -11,6 +11,8 @@ use rusqlite::{Connection, Transaction};
 use crate::db::school_accounts::{SchoolAccount, CreateSchoolAccountRequest, SqliteSchoolAccountRepository, SchoolAccountRepository};
 use crate::csv_commands::{ExistingAccountInfo};
 use crate::db::csv_transform::{CsvTransformer, TransformError};
+use crate::DbState;
+use tauri::State;
 
 #[derive(Debug)]
 enum WorkItem {
@@ -28,13 +30,19 @@ pub struct ProcessingResult {
 pub struct ParallelCsvProcessor {
     db_path: String,
     num_workers: usize,
+    db_state: Arc<DbState>,
 }
 
 impl ParallelCsvProcessor {
-    pub fn new(connection: &Connection, num_workers: Option<usize>) -> Self {
-        let num_workers = num_workers.unwrap_or_else(|| thread::available_parallelism().unwrap().get());
+    pub fn new(connection: &Connection, num_workers: Option<usize>, db_state: &State<DbState>) -> Self {
+        // Determine the number of workers, defaulting to available parallelism
+        let num_workers = num_workers.unwrap_or_else(|| {
+            thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4) // Fallback to 4 if unable to determine
+        });
         
-        // Fix: Handle the path correctly by converting it to a string directly
+        // Get the database path, with a robust fallback
         let db_path = connection.path()
             .map(|p| p.to_string())
             .unwrap_or_else(|| String::from(":memory:"));
@@ -42,6 +50,22 @@ impl ParallelCsvProcessor {
         ParallelCsvProcessor {
             db_path,
             num_workers,
+            db_state: Arc::new(db_state.inner().to_owned()),
+        }
+    }
+
+    // Optional: Add an alternative constructor for more flexibility
+    pub fn with_path(db_path: String, num_workers: Option<usize>, db_state: &State<DbState>) -> Self {
+        let num_workers = num_workers.unwrap_or_else(|| {
+            thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4)
+        });
+
+        ParallelCsvProcessor {
+            db_path,
+            num_workers,
+            db_state: Arc::new(db_state.inner().to_owned()),
         }
     }
 
@@ -88,6 +112,7 @@ impl ParallelCsvProcessor {
         
         let db_path = self.db_path.clone();
         let headers = Arc::new(headers);
+        let db_state = self.db_state.clone(); // Clone the state
 
         // Process chunks in parallel
         records.par_chunks(chunk_size)
@@ -97,7 +122,7 @@ impl ParallelCsvProcessor {
                     // Create a new connection for each thread
                     let mut thread_conn = Connection::open(&db_path)
                         .expect("Failed to create thread connection");
-                    let transformer = CsvTransformer::new(&headers, thread_conn);
+                    let transformer = CsvTransformer::new(&headers, Arc::clone(&self.db_state));
 
                     for record in chunk {
                         match transformer.transform_record(record) {
@@ -112,7 +137,10 @@ impl ParallelCsvProcessor {
                                         .and_then(|existing| existing.existing_accounts.first());
                                     
                                     match existing_match {
-                                        Some(account) => WorkItem::Update(account.id, create_request.clone()),
+                                        Some(account) => {
+                                            // For existing accounts, always try to update
+                                            WorkItem::Update(account.id, create_request.clone())
+                                        },
                                         None => WorkItem::Create(create_request)
                                     }
                                 };
@@ -189,12 +217,15 @@ impl ParallelCsvProcessor {
                                 match repo.create_school_account(&tx, create_request.clone()) {
                                     Ok(_) => successful += 1,
                                     Err(e) => {
-                                        failed += 1;
-                                        errors.push(format!(
-                                            "Failed to create account for {}: {}", 
-                                            create_request.school_id, 
-                                            e
-                                        ));
+                                        // Optional: Check for unique constraint violation
+                                        if !e.to_string().contains("UNIQUE constraint failed") {
+                                            failed += 1;
+                                            errors.push(format!(
+                                                "Failed to create account for {}: {}", 
+                                                create_request.school_id, 
+                                                e
+                                            ));
+                                        }
                                     }
                                 }
                             }
@@ -202,12 +233,15 @@ impl ParallelCsvProcessor {
                                 match repo.update_school_account(&tx, id, update_request.into()) {
                                     Ok(_) => successful += 1,
                                     Err(e) => {
-                                        failed += 1;
-                                        errors.push(format!(
-                                            "Failed to update account {}: {}", 
-                                            id, 
-                                            e
-                                        ));
+                                        // Ignore unique constraint errors during update
+                                        if !e.to_string().contains("UNIQUE constraint failed") {
+                                            failed += 1;
+                                            errors.push(format!(
+                                                "Failed to update account {}: {}", 
+                                                id, 
+                                                e
+                                            ));
+                                        }
                                     }
                                 }
                             }
@@ -233,7 +267,8 @@ pub fn process_csv_with_progress<F>(
     headers: StringRecord,
     existing_accounts: Vec<ExistingAccountInfo>,
     progress_callback: F,
-    last_updated_semester_id: Option<Uuid>  // Add last_updated_semester_id parameter
+    last_updated_semester_id: Option<Uuid>,  // Add last_updated_semester_id parameter
+    db_state: &State<DbState>
 ) -> ProcessingResult 
 where
     F: Fn(f32) + Send + 'static

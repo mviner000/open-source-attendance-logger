@@ -81,6 +81,7 @@ pub struct CsvValidator {
 
 impl CsvValidator {
     pub fn new(connection: Connection) -> Self {
+        let new_connection = Connection::open(connection.path().unwrap()).expect("Failed to open new connection");
         CsvValidator {
             // 10MB Max File Size
             max_file_size: 100 * 1024 * 1024,
@@ -100,7 +101,7 @@ impl CsvValidator {
                 "is_active".to_string(),
                 "last_updated_semester_id".to_string(),
             ],
-            connection,
+            connection: new_connection,
         }
     }
 

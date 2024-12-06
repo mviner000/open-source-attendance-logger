@@ -31,6 +31,7 @@ use std::time::Duration;
 
 pub use crate::config::{Config, DatabaseConfig}; 
 
+#[derive(Clone)]
 pub struct DbState(pub Database);
 
 unsafe impl Send for DbState {}

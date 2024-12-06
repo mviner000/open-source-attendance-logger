@@ -1,5 +1,7 @@
 // src/db/csv_transform.rs
 
+use crate::DbState;
+use std::sync::Arc;
 use csv::StringRecord;
 use crate::db::school_accounts::{CreateSchoolAccountRequest, Gender};
 use crate::db::semester::{SemesterRepository, SqliteSemesterRepository};
@@ -13,6 +15,7 @@ pub enum TransformError {
     UnknownHeader(String),
     ValidationError(ValidationError),
     SemesterNotFound(String),
+    DatabaseError(String),
 }
 
 impl From<ValidationError> for TransformError {
@@ -23,18 +26,21 @@ impl From<ValidationError> for TransformError {
 
 pub struct CsvTransformer {
     headers: StringRecord,
-    conn: Connection,
+    db_state: Arc<DbState>,
 }
 
 impl CsvTransformer {
-    pub fn new(headers: &StringRecord, conn: Connection) -> Self {
+    pub fn new(headers: &StringRecord, db_state: Arc<DbState>) -> Self {
         CsvTransformer {
             headers: headers.clone(),
-            conn,
+            db_state: db_state,
         }
     }
 
     pub fn transform_record(&self, record: &StringRecord) -> Result<CreateSchoolAccountRequest, TransformError> {
+        // Get a fresh connection when needed
+        let conn = self.db_state.0.get_cloned_connection();
+        
         // Helper function to map header to index
         let get_index = |header: &str| -> Option<usize> {
             self.headers.iter()
@@ -110,7 +116,7 @@ impl CsvTransformer {
             .and_then(|idx| record.get(idx))
             .and_then(|value| {
                 let semester_repo = SqliteSemesterRepository;
-                match semester_repo.get_semester_by_label(&self.conn, value.trim()) {
+                match semester_repo.get_semester_by_label(&conn, value.trim()) {
                     Ok(semester) => Some(semester.id),
                     Err(_) => None
                 }
@@ -160,6 +166,9 @@ impl std::fmt::Display for TransformError {
             }
             TransformError::SemesterNotFound(label) => {
                 write!(f, "Semester not found: {}", label)
+            }
+            TransformError::DatabaseError(msg) => {
+                write!(f, "Database error: {}", msg)
             }
         }
     }
