@@ -8,6 +8,7 @@ import { CreateAttendanceRequest } from '@/lib/attendance'
 import { Purpose, PurposeApi } from '@/lib/purpose'
 import PurposeCard from '@/components/purpose/PurposeCard'
 import { PurposeModal } from '../purpose-modal'
+import { cn } from '@/lib/utils'
 
 interface CreateAttendanceFormProps {
   onCreateAttendance: (attendance: CreateAttendanceRequest) => Promise<void>
@@ -97,11 +98,12 @@ const CreateAttendanceForm: React.FC<CreateAttendanceFormProps> = ({ onCreateAtt
                       key={purpose.id}
                       label={purpose.label}
                       iconName={purpose.icon_name}
-                      className={`${
+                      className={cn(
                         selectedPurpose?.label === purpose.label 
-                          ? 'border-blue-500 shadow-md bg-blue-50' 
+                          ? 'border-green-500 shadow-md bg-green-50' 
                           : ''
-                      }`}
+                      )}
+                      iconColor={selectedPurpose?.label === purpose.label ? 'text-green-500' : 'text-amber-500'}
                       onClick={() => handlePurposeSelect(purpose)}
                     />
                   ))}

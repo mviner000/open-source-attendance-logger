@@ -17,8 +17,7 @@ interface AttendanceTableProps {
 
 const AttendanceTable: React.FC<AttendanceTableProps> = ({ attendances }) => {
   return (
-    <div className='ml-1 mr-1 md:-mx-8'>
-    <div className='p-4 bg-white -mx-64 md:px-32 sm:-mx-56 md:-mx-64 lg:-mx-64 xl:-mx-36 lg:px-40 xl:px-14 sm:px-10'>
+    <div className=' bg-white max-w-screen-xl mx-auto mt-5 mb-5 px-4 sm:px-6 lg:px-0'>
         <div className='text-center w-full'>
         <img 
             src='/attendance_records_header.png' 
@@ -65,7 +64,6 @@ const AttendanceTable: React.FC<AttendanceTableProps> = ({ attendances }) => {
             </TableBody>
           </Table>
       </div>
-    </div>
     </div>
   )
 }

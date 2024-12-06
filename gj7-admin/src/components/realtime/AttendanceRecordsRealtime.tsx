@@ -110,7 +110,7 @@ const AttendanceRecordsRealtime: React.FC = () => {
 
   return (
     <ToastProvider>
-      <div className="p-4 max-w-4xl mx-auto">
+      <div className="max-w-screen-xl mx-auto mt-5 mb-5 px-4 sm:px-6 lg:px-0">
         {!isConnected && (
           <Alert variant="destructive" className="mb-4">
             <AlertTitle>Connection Lost</AlertTitle>
@@ -126,7 +126,7 @@ const AttendanceRecordsRealtime: React.FC = () => {
           </Alert>
         )}
 
-        <div className="mt-4 flex items-center mb-5 justify-end space-x-2 max-w-screen-2xl -mx-44">
+        <div className="flex items-center justify-end space-x-2 max-w-screen-xl mx-auto mt-5 mb-5 px-4 sm:px-6 lg:px-0">
           <SearchBar
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}

@@ -1,11 +1,10 @@
-// src/AccountsStatsWithImportCSV.tsx
 import React, { useState, useEffect } from 'react';
 import { SchoolAccountsApi, SchoolAccount, Semester } from '@/lib/school_accounts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SemesterModal } from '@/components/semester-modal';
 import CsvImportComponent from './CsvImportComponent';
 import { Button } from '@/components/ui/button';
-import { Loader2, Search, SquarePen } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { SearchModal } from './search-modal';
 import { useToast } from "@/hooks/use-toast"
 import SemesterCard from './SemesterCard';
@@ -70,8 +69,8 @@ const AccountsStatsWithImportCSV: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 mt-5 max-w-screen-xl mx-auto">
-      <div className="w-full max-w-6xl mx-auto space-y-6">
+    <div className="flex-1 mt-5 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-0">
+      <div className="space-y-6">
         {loading ? (
           <div className="flex justify-center items-center">
             <Button disabled>
@@ -88,8 +87,8 @@ const AccountsStatsWithImportCSV: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 xl:grid-cols-2 xl:-mx-16 gap-4">
-              <Card>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-2">
+              <Card className="col-span-1 sm:col-span-2 lg:col-span-1">
                 <CardHeader>
                   <CardTitle>Import Accounts</CardTitle>
                 </CardHeader>
@@ -98,14 +97,14 @@ const AccountsStatsWithImportCSV: React.FC = () => {
                 </CardContent>
               </Card>
 
+              <div className='col-span-1 sm:col-span-2 lg:col-span-1'>
               <SemesterCard
-                  activeSemester={activeSemester}
-                  setIsSemesterModalOpen={setIsSemesterModalOpen}
-                  accountCounts={accountCounts}
-                  setIsSearchModalOpen={setIsSearchModalOpen}
-                />
-
-              
+                activeSemester={activeSemester}
+                setIsSemesterModalOpen={setIsSemesterModalOpen}
+                accountCounts={accountCounts}
+                setIsSearchModalOpen={setIsSearchModalOpen}
+              />
+              </div>
             </div>
             
             <SearchModal
@@ -127,3 +126,4 @@ const AccountsStatsWithImportCSV: React.FC = () => {
 };
 
 export default AccountsStatsWithImportCSV;
+

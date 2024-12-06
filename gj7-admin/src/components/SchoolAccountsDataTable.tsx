@@ -201,7 +201,7 @@ export function SchoolAccountsDataTable() {
   });
 
   return (
-    <div className='max-w-screen-xl mx-auto mt-5 mb-5'>
+    <div className='max-w-screen-xl mx-auto mt-5 mb-5 px-4 sm:px-6 lg:px-0'>
      
 
       {/* Filtering */}
