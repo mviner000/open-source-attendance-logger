@@ -6,6 +6,7 @@ import AttendanceRecordsRealtime from "./components/realtime/AttendanceRecordsRe
 import AccountsStatsWithImportCSV from "./components/AccountsStatsWithImportCSV";
 import { SchoolAccountsDataTable } from "./components/SchoolAccountsDataTable";
 import PurposeManager from "./components/PurposeManager";
+import About from "./components/About";
 
 
 function App() {
@@ -25,7 +26,8 @@ function App() {
                   <Routes>
                   <Route path="/accounts/paginated" element={<SchoolAccountsDataTable />} />
                   <Route path="/attendance/realtime" element={<AttendanceRecordsRealtime />} />
-                    <Route path="/purpose/manager" element={<PurposeManager />} />
+                  <Route path="/purpose/manager" element={<PurposeManager />} />
+                  <Route path="/about" element={<About />} />
                   </Routes>
                 </div>
               </div>

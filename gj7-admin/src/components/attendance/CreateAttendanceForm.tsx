@@ -100,10 +100,11 @@ const CreateAttendanceForm: React.FC<CreateAttendanceFormProps> = ({ onCreateAtt
                       iconName={purpose.icon_name}
                       className={cn(
                         selectedPurpose?.label === purpose.label 
-                          ? 'border-green-500 shadow-md bg-green-50' 
+                          ? 'border-amber-500 shadow-md bg-amber-50 ' 
                           : ''
                       )}
-                      iconColor={selectedPurpose?.label === purpose.label ? 'text-green-500' : 'text-amber-500'}
+                      iconColor={selectedPurpose?.label === purpose.label ? 'text-amber-500' : 'text-green-500'}
+                      labelColor={selectedPurpose?.label === purpose.label ? 'text-amber-500' : 'text-green-500'}
                       onClick={() => handlePurposeSelect(purpose)}
                     />
                   ))}

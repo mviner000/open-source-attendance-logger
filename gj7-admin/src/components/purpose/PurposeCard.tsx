@@ -18,11 +18,12 @@ interface PurposeCardProps {
   label: string;
   iconName: string;
   className?: string;
-  iconColor?: string; // New prop for icon color
+  iconColor?: string;
+  labelColor?: string; // New prop for icon color
   onClick?: (details: { label: string; iconName: string }) => void;
 }
 
-const PurposeCard = ({ label, iconName, className, iconColor = 'text-amber-500', onClick }: PurposeCardProps) => {
+const PurposeCard = ({ label, iconName, className, labelColor = 'text-black', iconColor = 'text-green-500', onClick }: PurposeCardProps) => {
   // Normalize the icon name and dynamically get icon from lucide-react
   const normalizedIconName = normalizeIconName(iconName);
   const Icon: LucideIcon = (Icons[normalizedIconName as keyof typeof Icons] as LucideIcon) || Icons.HelpCircle;
@@ -38,13 +39,13 @@ const PurposeCard = ({ label, iconName, className, iconColor = 'text-amber-500',
     <div 
       className={cn(
         "flex flex-col items-center justify-center p-6 rounded-lg border cursor-pointer",
-        "bg-white text-black border border-amber-500 border-b-[6px] hover:bg-amber-50 hover:border-amber-600 active:border-b-2 active:border-t-[6px] active:translate-y-[4px] transition-all duration-150 shadow-sm",
+        "bg-white text-black border border-green-500 border-b-[6px] hover:bg-amber-50 hover:border-amber-600 active:border-b-2 active:border-t-[6px] active:translate-y-[4px] transition-all duration-150 shadow-sm",
         "bg-white dark:bg-gray-800",
         className
       )}
       onClick={handleClick}
     >
-      <div className="text-sm font-medium mb-4">{label}</div>
+      <div className={cn("text-lg font-bold mb-4", labelColor)}>{label}</div>
       <Icon className={cn("w-12 h-12", iconColor)} />
     </div>
   );
