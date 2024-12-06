@@ -258,5 +258,82 @@ export const CsvImportApi = {
       logger.log(`CSV import failed: ${error}`, 'error');
       throw error;
     }
+  },
+
+
+  async importCsvFileParallel(request: CsvImportRequest): Promise<CsvImportResponse> {
+    // Create a list to collect log messages
+    const logMessages: LogMessage[] = [];
+
+    // Setup log listener before invoking
+    const unlisten = await listen<LogMessage>('log-message', (event) => {
+      const logMessage = event.payload;
+      
+      // Dispatch to console
+      console.log('Backend Log:', logMessage);
+      
+      // Add to local log messages
+      logMessages.push(logMessage);
+      
+      // Notify all registered listeners
+      this.logMessageListeners.forEach(listener => listener(logMessage));
+    });
+
+    try {
+      const startTime = Date.now();
+      logger.log(`Importing CSV file (Parallel): ${request.file_path}`, 'info');
+      
+      const result = await invoke('import_csv_file_parallel', { 
+        filePath: request.file_path,
+        lastUpdatedSemesterId: request.semester_id,
+        forceUpdate: request.force_update || false
+      });
+      
+      const importResponse = result as CsvImportResponse;
+      const duration = Date.now() - startTime;
+      
+      // Enhanced logging with detailed information
+      logger.log(`Parallel CSV import completed in ${duration}ms`, 'info');
+      logger.log(`Total Processed: ${importResponse.total_processed}`, 'info');
+      logger.log(`Successful: ${importResponse.successful_imports}`, 'info');
+      logger.log(`Failed: ${importResponse.failed_imports}`, 'info');
+
+      if (importResponse.account_status_counts) {
+        const statusCounts = importResponse.account_status_counts;
+        logger.log(`Total Accounts: ${statusCounts.total_accounts}`, 'info');
+        logger.log(`Activated Accounts: ${statusCounts.activated_accounts}`, 'info');
+        logger.log(`Deactivated Accounts: ${statusCounts.deactivated_accounts}`, 'info');
+      }
+
+      if (importResponse.failed_imports > 0) {
+        logger.log(`Import completed with errors: ${importResponse.error_details.length} errors found`, 'warn');
+        importResponse.error_details.forEach(error => {
+          logger.log(`Import error: ${error}`, 'error');
+        });
+      } else {
+        logger.log('Parallel import completed successfully with no errors', 'success');
+      }
+
+      if (importResponse.existing_account_info) {
+        const info = importResponse.existing_account_info;
+        logger.log(`Existing accounts to be processed: ${info.existing_accounts_count}`, 'info');
+        logger.log(`New accounts to be created: ${info.new_accounts_count}`, 'info');
+      }
+
+      // Unlisten to prevent memory leaks
+      unlisten();
+
+      return {
+        ...importResponse,
+        // Attach collected log messages to the response if needed
+        logMessages
+      };
+    } catch (error) {
+      // Unlisten in case of error
+      unlisten();
+      
+      logger.log(`Parallel CSV import failed: ${error}`, 'error');
+      throw error;
+    }
   }
 };

@@ -164,6 +164,7 @@ pub fn run() {
                 // CSV commands
                 csv_commands::validate_csv_file,
                 csv_commands::import_csv_file,
+                csv_commands::import_csv_file_parallel,
                 csv_commands::check_existing_accounts,
 
                 // Semester commands

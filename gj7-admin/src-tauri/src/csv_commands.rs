@@ -158,7 +158,7 @@ pub async fn validate_csv_file(
 }
 
 #[command]
-pub async fn import_csv_file_parallel(
+pub async fn import_csv_file(
     app_handle: tauri::AppHandle,
     state: State<'_, DbState>,
     file_path: String,
@@ -430,7 +430,7 @@ pub async fn import_csv_file_parallel(
 }
 
 #[command]
-pub async fn import_csv_file(
+pub async fn import_csv_file_parallel(
     app_handle: tauri::AppHandle,
     state: State<'_, DbState>,
     file_path: String,
