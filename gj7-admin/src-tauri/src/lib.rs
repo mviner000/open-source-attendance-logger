@@ -15,6 +15,7 @@ mod network_server;
 mod websocket;
 mod logger;
 mod parallel_csv_processor;
+mod parallel_csv_validator;
 
 use tauri::Manager;
 use tauri::Emitter;

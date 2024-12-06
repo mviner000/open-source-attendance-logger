@@ -8,6 +8,7 @@ use crate::db::csv_transform::{CsvTransformer, batch_transform_records};
 use crate::db::school_accounts::{SchoolAccount, CreateSchoolAccountRequest};
 use crate::parallel_csv_processor::process_csv_with_progress;
 use crate::parallel_csv_processor::ParallelCsvProcessor;
+use crate::parallel_csv_validator::ParallelCsvValidator;
 use crate::logger::{emit_log, LogMessage};
 use std::sync::Arc;
 use csv::StringRecord;
@@ -131,8 +132,8 @@ pub async fn validate_csv_file(
     // Get a cloned connection
     let conn = state.0.get_cloned_connection();
     
-    // Create validator with the connection
-    let validator = CsvValidator::new(conn);
+    // Create parallel validator with the connection
+    let validator = ParallelCsvValidator::new(conn);
     
     info!("Attempting to validate CSV file: {}", file_path);
     

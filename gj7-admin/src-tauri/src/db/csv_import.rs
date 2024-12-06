@@ -26,7 +26,7 @@ pub struct ExistingAccountInfo {
     pub row_number: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SerializableStringRecord {
     pub values: Vec<String>
 }
@@ -83,8 +83,8 @@ impl CsvValidator {
     pub fn new(connection: Connection) -> Self {
         let new_connection = Connection::open(connection.path().unwrap()).expect("Failed to open new connection");
         CsvValidator {
-            // 10MB Max File Size
-            max_file_size: 100 * 1024 * 1024,
+            // 300MB Max File Size
+            max_file_size: 300 * 1024 * 1024,
             required_headers: vec![
                 "student_id".to_string(),
                 "first_name".to_string(),
@@ -381,7 +381,7 @@ impl CsvValidator {
         }
     }
 
-    fn validate_headers(&self, headers: &StringRecord) -> Result<(), Vec<ValidationError>> {
+    pub fn validate_headers(&self, headers: &StringRecord) -> Result<(), Vec<ValidationError>> {
         let header_names: Vec<String> = headers.iter().map(|h| h.to_lowercase()).collect();
         
         let missing_headers: Vec<String> = self.required_headers
@@ -402,7 +402,7 @@ impl CsvValidator {
         }
     }
 
-    fn validate_record(&self, record: &StringRecord, headers: &StringRecord) -> Result<(), Vec<ValidationError>> {
+    pub fn validate_record(&self, record: &StringRecord, headers: &StringRecord) -> Result<(), Vec<ValidationError>> {
         let mut record_errors = Vec::new();
     
         // Function to get index of a header (case-insensitive)

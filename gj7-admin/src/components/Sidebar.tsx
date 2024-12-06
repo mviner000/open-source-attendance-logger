@@ -37,7 +37,7 @@ const Sidebar: React.FC = () => {
         </div>
         
         {/* Bottom About Link */}
-        <div className="mt-auto mb-5 mx-5 bg-[#795d18]">
+        <div className="mt-auto mx-5 bg-[#795d18]">
           <Link
             to="/about"
             className={`block py-2 px-4 transition-colors duration-200 ${isActive('/about')} relative`}

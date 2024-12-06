@@ -212,7 +212,7 @@ export default function About() {
       data: {
         id: '6',
         title: 'Backend Developer',
-        description: 'Design user interface for the new mobile application',
+        description: 'Rust, Typescript, lurking in the shadows',
         assignedTo: [
           { name: 'Melvin Nogoy', avatar: '/team/nogoy.jpg' },
         ],
