@@ -3,12 +3,11 @@ use uuid::Uuid;
 use std::path::Path;
 use tauri::{State, command};
 use crate::DbState;
-use crate::db::csv_import::{CsvValidator, CsvValidationResult};
+use crate::db::csv_import::CsvValidationResult;
 use crate::db::csv_transform::{CsvTransformer, batch_transform_records};
-use crate::db::school_accounts::{SchoolAccount, CreateSchoolAccountRequest};
+use crate::db::school_accounts::SchoolAccount;
 use crate::parallel_csv_processor::process_csv_with_progress;
 use crate::parallel_csv_processor::ParallelCsvProcessor;
-use crate::parallel_csv_validator::ParallelCsvValidator;
 use crate::db::csv_import::ValidationErrorType;
 use crate::logger::{emit_log, LogMessage};
 use std::sync::Arc;
@@ -382,8 +381,8 @@ pub async fn import_csv_file_parallel(
         });
     };
 
-    // Process the CSV data asynchronously
-    let processing_result = process_csv_with_progress(
+    // Process the CSV data asynchronously with error handling
+    let processing_result = match process_csv_with_progress(
         &processor,
         records.clone(),
         headers.clone(),
@@ -391,7 +390,14 @@ pub async fn import_csv_file_parallel(
         progress_callback,
         Some(last_updated_semester_id),
         &state
-    );    
+    ) {
+        Ok(result) => result,
+        Err(error) => {
+            // Log the error and return
+            error!("CSV processing failed: {}", error);
+            return Err(format!("CSV processing failed: {}", error));
+        }
+    };
 
     // Use a new transaction for account activation/update
     let mut main_conn = state.0.pool.get()

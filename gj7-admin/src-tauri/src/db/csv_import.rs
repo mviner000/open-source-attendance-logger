@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{Read, BufReader};
 use csv::{Reader, StringRecord};
 use uuid::Uuid;
-use rusqlite::{Connection, params};
+use rusqlite::{Connection};
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

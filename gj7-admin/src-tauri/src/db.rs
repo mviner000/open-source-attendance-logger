@@ -5,7 +5,8 @@ use rusqlite::{Connection, Result};
 use tauri::AppHandle;
 use serde::Serialize;
 use std::path::PathBuf;
-use r2d2::{Pool, PooledConnection};
+use r2d2::Pool;
+use std::time::Duration;
 use r2d2_sqlite::SqliteConnectionManager;
 
 use crate::config;
@@ -26,7 +27,6 @@ use semester::{SemesterRepository, SqliteSemesterRepository};
 use attendance::{AttendanceRepository, SqliteAttendanceRepository};
 use purpose::{PurposeRepository, SqlitePurposeRepository};
 use std::sync::Arc;
-use crate::db::csv_import::CsvValidator;
 use crate::parallel_csv_validator::ParallelCsvValidator;
 
 #[derive(Debug, Serialize, Clone)]
@@ -105,9 +105,22 @@ impl Database {
         };
         
         info!("Opening database pool at {:?}", db_path);
-        let manager = SqliteConnectionManager::file(db_path.clone());
-        let pool = Pool::new(manager)
-            .map_err(|e| format!("Failed to create connection pool: {}", e))?;
+        let manager = SqliteConnectionManager::file(db_path.clone())
+            .with_init(|conn| {
+                conn.execute_batch("
+                    PRAGMA journal_mode=WAL;
+                    PRAGMA synchronous=NORMAL;
+                    PRAGMA cache_size=-20000;
+                    PRAGMA busy_timeout=5000;
+                ")?;
+                Ok(())
+            });
+
+        let pool = Pool::builder()
+            .max_size(20) 
+            .connection_timeout(Duration::from_secs(30))
+            .idle_timeout(Some(Duration::from_secs(300)))
+            .build(manager)?;
         
         // Use pool's connection for initial setup
         let conn = pool.get()

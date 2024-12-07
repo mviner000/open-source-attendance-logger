@@ -1,6 +1,6 @@
 // src/db/auth.rs
-use log::{info, error};
-use rusqlite::{Connection, Result as SqliteResult, params, Error as SqliteError};
+use log::info;
+use rusqlite::{Connection, Result as SqliteResult, params};
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize)]

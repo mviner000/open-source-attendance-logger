@@ -6,7 +6,6 @@ use csv::StringRecord;
 use crate::db::school_accounts::{CreateSchoolAccountRequest, Gender};
 use crate::db::semester::{SemesterRepository, SqliteSemesterRepository};
 use crate::db::csv_import::ValidationError;
-use rusqlite::Connection;
 
 #[derive(Debug)]
 pub enum TransformError {

@@ -5,7 +5,7 @@ use std::fmt;
 use tauri::State;
 use crate::DbState;
 use crate::db::school_accounts::{PaginatedSchoolAccounts, SchoolAccount, UpdateSchoolAccountRequest, AccountStatusCounts};
-use crate::db::semester::{Semester,};
+use crate::db::semester::Semester;
 use uuid::Uuid;
 use rusqlite::{Result, Error as RusqliteError};
 use serde::{Serialize, Deserialize};

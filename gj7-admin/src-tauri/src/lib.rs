@@ -23,7 +23,7 @@ use tokio;
 use db::{Database, init_db, DatabaseInfo};
 use db::auth::Credentials;
 use rusqlite::Result;
-use network::{start_network_monitoring, check_network};
+use network::check_network;
 use first_launch::handle_first_launch;
 use network_server::start_network_server;
 use log::error;

@@ -1,7 +1,7 @@
 // src/db/attendance.rs
 
 use uuid::Uuid;
-use rusqlite::{params, Connection, Result, types::ToSql};
+use rusqlite::{params, Connection, Result};
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
 

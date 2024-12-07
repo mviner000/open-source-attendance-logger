@@ -13,7 +13,7 @@ use futures::{sink::SinkExt, stream::StreamExt};
 use tokio::sync::{mpsc, Mutex};
 use std::{collections::HashMap, sync::Arc, path::PathBuf};
 use serde::{Serialize, Deserialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use rusqlite::Connection;
 
 use crate::db::attendance::{
