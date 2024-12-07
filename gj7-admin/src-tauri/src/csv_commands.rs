@@ -6,8 +6,7 @@ use crate::DbState;
 use crate::db::csv_import::CsvValidationResult;
 use crate::db::csv_transform::{CsvTransformer, batch_transform_records};
 use crate::db::school_accounts::SchoolAccount;
-use crate::parallel_csv_processor::process_csv_with_progress;
-use crate::parallel_csv_processor::ParallelCsvProcessor;
+use crate::redis_csv_processor::RedisCsvProcessor;
 use crate::db::csv_import::ValidationErrorType;
 use crate::logger::{emit_log, LogMessage};
 use std::sync::Arc;
@@ -367,9 +366,15 @@ pub async fn import_csv_file_parallel(
         .await
         .map_err(|e| format!("Failed to check existing accounts: {}", e))?;
 
-    // Initialize parallel processor with the pool
-    let processor = ParallelCsvProcessor::new(&Arc::new(state.0.pool.clone()), None, &state);
-    
+    // Redis setup
+    let redis_url = std::env::var("REDIS_URL")
+        .unwrap_or_else(|_| "redis://localhost:6379".to_string());
+
+    log::info!("REDIS is starting... URL: {}", redis_url);
+        
+    let redis_processor = RedisCsvProcessor::new(&redis_url, Some(1000), Some(50)).await
+    .map_err(|e| format!("Failed to create Redis processor: {}", e))?;
+
     // Set up progress callback
     let app_handle_clone = app_handle.clone();
     let progress_callback = move |progress: f32| {
@@ -381,24 +386,14 @@ pub async fn import_csv_file_parallel(
         });
     };
 
-    // Process the CSV data asynchronously with error handling
-    let processing_result = match process_csv_with_progress(
-        &processor,
-        records.clone(),
-        headers.clone(),
-        vec![existing_accounts.clone()],
-        progress_callback,
-        Some(last_updated_semester_id),
-        &state
-    ) {
-        Ok(result) => result,
-        Err(error) => {
-            // Log the error and return
-            error!("CSV processing failed: {}", error);
-            return Err(format!("CSV processing failed: {}", error));
-        }
-    };
-
+    // Process the CSV data asynchronously with Redis using the new retry mechanism
+    let processing_result = redis_processor.process_large_csv_in_chunks(&records, &headers, Some(2000))
+    .await
+    .map_err(|e| {
+        log::debug!("CSV processing encountered an error: {}", e);
+        e
+    })?;
+    
     // Use a new transaction for account activation/update
     let mut main_conn = state.0.pool.get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;

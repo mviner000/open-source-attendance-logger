@@ -126,8 +126,8 @@ impl Database {
             });
 
         let pool = Pool::builder()
-            .max_size(250)  // Maximum concurrent connections
-            .min_idle(Some(50))  // Minimum idle connections
+            .max_size(500)  // Maximum concurrent connections
+            .min_idle(Some(100))  // Minimum idle connections
             .connection_timeout(Duration::from_secs(600))  // 10-minute connection timeout
             .idle_timeout(Some(Duration::from_secs(3600)))  // 1-hour idle timeout
             .max_lifetime(Some(Duration::from_secs(7200)))  // 2-hour max connection life

@@ -42,3 +42,5 @@ r2d2 = "0.8"
 r2d2_sqlite = "0.22"
 rand = "0.8"
 anyhow = "1.0"
+redis = { version = "0.24", features = ["tokio-comp", "cluster"] }
+dotenv = "0.15.0"
