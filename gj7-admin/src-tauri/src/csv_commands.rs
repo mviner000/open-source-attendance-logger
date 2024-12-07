@@ -6,7 +6,7 @@ use crate::DbState;
 use crate::db::csv_import::{CsvValidator, CsvValidationResult};
 use crate::db::csv_transform::{CsvTransformer, batch_transform_records};
 use crate::db::school_accounts::{SchoolAccount, CreateSchoolAccountRequest};
-use crate::parallel_csv_processor::process_csv_with_progress_async;
+use crate::parallel_csv_processor::process_csv_with_progress;
 use crate::parallel_csv_processor::ParallelCsvProcessor;
 use crate::parallel_csv_validator::ParallelCsvValidator;
 use crate::db::csv_import::ValidationErrorType;
@@ -323,8 +323,6 @@ pub async fn import_csv_file_parallel(
         .map_err(|e| format!("Failed to get validator connection: {}", e))?;
     let deactivate_conn = state.0.pool.get()
         .map_err(|e| format!("Failed to get deactivate connection: {}", e))?;
-    let processor_conn = state.0.pool.get()
-        .map_err(|e| format!("Failed to get processor connection: {}", e))?;
     let main_conn = state.0.pool.get()
         .map_err(|e| format!("Failed to get main connection: {}", e))?;
     let check_conn = state.0.pool.get()
@@ -370,8 +368,8 @@ pub async fn import_csv_file_parallel(
         .await
         .map_err(|e| format!("Failed to check existing accounts: {}", e))?;
 
-    // Initialize parallel processor with a new connection
-    let processor = ParallelCsvProcessor::new(&processor_conn, None, &state);
+    // Initialize parallel processor with the pool
+    let processor = ParallelCsvProcessor::new(&Arc::new(state.0.pool.clone()), None, &state);
     
     // Set up progress callback
     let app_handle_clone = app_handle.clone();
@@ -385,23 +383,23 @@ pub async fn import_csv_file_parallel(
     };
 
     // Process the CSV data asynchronously
-    let processing_result = process_csv_with_progress_async(
+    let processing_result = process_csv_with_progress(
         &processor,
         records.clone(),
         headers.clone(),
-        vec![existing_accounts.clone()], // Corrected here
+        vec![existing_accounts.clone()],
         progress_callback,
         Some(last_updated_semester_id),
-    ).await;    
+        &state
+    );    
 
     // Use a new transaction for account activation/update
     let mut main_conn = state.0.pool.get()
-    .map_err(|e| format!("Failed to get connection: {}", e))?;
+        .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     // Start a transaction
     let mut tx = main_conn.transaction()
         .map_err(|e| format!("Failed to start transaction: {}", e))?;
-
 
     let mut activated_accounts = 0;
     
