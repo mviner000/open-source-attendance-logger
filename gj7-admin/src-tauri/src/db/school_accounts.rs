@@ -198,7 +198,7 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
         // Validate required fields
         if account.school_id.is_empty() {
             let err = rusqlite::Error::InvalidParameterName("School ID cannot be empty".to_string());
-            error!("Failed to create school account: {}", err);
+            error!("Eto kaya yon? Failed to create school account: {}", err);
             return Err(err);
         }
 
@@ -255,7 +255,7 @@ impl SchoolAccountRepository for SqliteSchoolAccountRepository {
                 Ok(created_account)
             },
             Err(e) => {
-                error!("Failed to create school account: {:?}", e);
+                error!("Or eto siguro. Failed to create school account: {:?}", e);
                 Err(e)
             }
         }

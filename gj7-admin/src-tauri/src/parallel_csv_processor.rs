@@ -1,18 +1,24 @@
 // src/parallel_csv_processor.rs
 
 use std::sync::{Arc, Mutex};
+use std::env;
 use std::thread;
 use std::path::Path;
 use crossbeam_channel::{bounded, Sender, Receiver};
 use rayon::prelude::*;
 use csv::StringRecord;
 use uuid::Uuid;
+use r2d2::{Pool, PooledConnection};
+use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, Transaction};
 use crate::db::school_accounts::{SchoolAccount, CreateSchoolAccountRequest, SqliteSchoolAccountRepository, SchoolAccountRepository};
 use crate::csv_commands::{ExistingAccountInfo};
 use crate::db::csv_transform::{CsvTransformer, TransformError};
 use crate::DbState;
 use tauri::State;
+use std::time::Duration;
+use tokio::sync::Semaphore;
+use tokio::task;
 
 #[derive(Debug)]
 enum WorkItem {
@@ -33,245 +39,270 @@ pub struct ParallelCsvProcessor {
     db_state: Arc<DbState>,
 }
 
+#[derive(Debug, Clone)]
+struct SystemResourceConfig {
+    total_cores: usize,
+    total_memory: u64,
+    available_memory: u64,
+    max_workers: usize,
+    memory_allocation: u64,
+    architecture: String,
+    operating_system: String,
+}
+
+impl SystemResourceConfig {
+    fn new() -> Self {
+        // Number of logical cores
+        let total_cores = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1);
+        
+        // Estimate memory (this is a simplified approach)
+        let total_memory = Self::estimate_system_memory();
+        
+        // Get system architecture
+        let architecture = env::consts::ARCH.to_string();
+        
+        // Get operating system
+        let operating_system = env::consts::OS.to_string();
+
+        let max_workers = Self::calculate_optimal_workers(total_cores);
+        let memory_allocation = Self::calculate_memory_allocation(total_memory);
+
+        Self {
+            total_cores,
+            total_memory,
+            available_memory: total_memory, // Simplified
+            max_workers,
+            memory_allocation,
+            architecture,
+            operating_system,
+        }
+    }
+
+    fn estimate_system_memory() -> u64 {
+        // Crude estimation - you might want to use a more sophisticated method
+        #[cfg(target_os = "windows")]
+        {
+            // Windows-specific memory detection (requires winapi)
+            use winapi::um::sysinfoapi::GlobalMemoryStatusEx;
+            use winapi::um::winbase::MEMORYSTATUSEX;
+
+            unsafe {
+                let mut mem_status: MEMORYSTATUSEX = std::mem::zeroed();
+                mem_status.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
+                
+                if GlobalMemoryStatusEx(&mut mem_status) != 0 {
+                    return mem_status.ullTotalPhys;
+                }
+            }
+        }
+
+        // Fallback for other platforms
+        // Assume a default of 8GB if detection fails
+        8 * 1024 * 1024 * 1024 // 8GB in bytes
+    }
+
+    fn calculate_optimal_workers(total_cores: usize) -> usize {
+        (total_cores * 2).max(8).min(256) // Double the number of threads, capped at 256
+    }    
+    
+    fn calculate_memory_allocation(total_memory: u64) -> u64 {
+        let total_gb = total_memory / (1024 * 1024 * 1024);
+        
+        match total_gb {
+            mem if mem <= 8 => total_memory * 6 / 10,     // 60% for systems <= 8GB
+            mem if mem <= 16 => total_memory * 75 / 100,  // 75% for systems <= 16GB
+            mem if mem <= 32 => total_memory * 85 / 100,  // 85% for systems <= 32GB
+            _ => total_memory * 9 / 10,                   // 90% for larger systems
+        }
+    }
+
+    fn debug_system_info(&self) {
+        println!("System Information:");
+        println!("Cores: {}", self.total_cores);
+        println!("Total Memory: {} GB", self.total_memory / (1024 * 1024 * 1024));
+        println!("Max Workers: {}", self.max_workers);
+        println!("Architecture: {}", self.architecture);
+        println!("Operating System: {}", self.operating_system);
+    }
+
+    fn monitor_and_adjust(&mut self) {
+        // Simplified monitoring - you might want to add more sophisticated 
+        // runtime monitoring mechanisms
+        let current_cores = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1);
+
+        if current_cores != self.total_cores {
+            self.total_cores = current_cores;
+            self.max_workers = Self::calculate_optimal_workers(current_cores);
+        }
+    }
+}
+
 impl ParallelCsvProcessor {
-    pub fn new(connection: &Connection, num_workers: Option<usize>, db_state: &State<DbState>) -> Self {
-        // Determine the number of workers, defaulting to available parallelism
-        let num_workers = num_workers.unwrap_or_else(|| {
-            thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(4) // Fallback to 4 if unable to determine
-        });
+    // Preserve the existing new method, but integrate dynamic resource detection
+    pub fn new(
+        connection: &Connection,
+        num_workers: Option<usize>,
+        state: &State<'_, DbState>
+    ) -> Self {
+        let resource_config = SystemResourceConfig::new();
         
-        // Get the database path, with a robust fallback
-        let db_path = connection.path()
-            .map(|p| p.to_string())
-            .unwrap_or_else(|| String::from(":memory:"));
-        
+        let workers = num_workers.unwrap_or(resource_config.max_workers);
+
         ParallelCsvProcessor {
-            db_path,
-            num_workers,
-            db_state: Arc::new(db_state.inner().to_owned()),
+            db_path: state.0.get_db_path().to_string_lossy().into_owned(),
+            num_workers: workers,
+            db_state: Arc::new(DbState(state.0.clone())),
         }
     }
 
-    // Optional: Add an alternative constructor for more flexibility
-    pub fn with_path(db_path: String, num_workers: Option<usize>, db_state: &State<DbState>) -> Self {
-        let num_workers = num_workers.unwrap_or_else(|| {
-            thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(4)
-        });
-
-        ParallelCsvProcessor {
-            db_path,
-            num_workers,
-            db_state: Arc::new(db_state.inner().to_owned()),
+    fn retry_operation<F, T, E>(mut operation: F, max_attempts: usize) -> Result<T, E>
+    where
+        F: FnMut() -> Result<T, E>,
+        E: std::fmt::Debug,
+    {
+        let mut attempts = 0;
+        loop {
+            attempts += 1;
+            match operation() {
+                Ok(result) => return Ok(result),
+                Err(e) if attempts < max_attempts => {
+                    // Optional: Add a small delay between retries
+                    std::thread::sleep(std::time::Duration::from_millis(100 * attempts as u64));
+                    continue;
+                }
+                Err(e) => return Err(e),
+            }
         }
     }
 
-    pub fn process_csv_data(
+
+    // Enhanced async processing method with dynamic resource management
+    pub async fn process_csv_data_async(
         &self,
         records: Vec<StringRecord>,
         headers: StringRecord,
         existing_accounts: Vec<ExistingAccountInfo>,
-        last_updated_semester_id: Option<Uuid>
+        last_updated_semester_id: Option<Uuid>,
     ) -> ProcessingResult {
-        let (work_sender, work_receiver) = bounded::<WorkItem>(self.num_workers * 2);
-        let (result_sender, result_receiver) = bounded(self.num_workers * 2);
-
-        // Start worker threads
-        let workers = self.spawn_workers(work_receiver, result_sender.clone());
-
-        // Process records in chunks using rayon
-        let chunk_size = (records.len() / self.num_workers).max(1);
+        let total_records = records.len();
+        let workers = self.num_workers;
+        let chunk_size = (total_records / (workers * 2)).max(1);
         
-        // Create transformer connections per thread
-        let processing_errors = Arc::new(Mutex::new(Vec::new()));
-        let work_sender = Arc::new(work_sender);
-
-        // Create a mapping of school_ids to existing accounts for faster lookup
-        let existing_accounts_map: std::collections::HashMap<String, ExistingAccountInfo> = 
-        existing_accounts.clone()  // Use the existing_accounts directly
-            .into_iter()
-            .map(|info| {
-                // Clone existing_accounts before processing
-                let cloned_accounts = info.existing_accounts.clone();
-                
-                // Create a map of school_ids to existing accounts
-                let school_id_map: std::collections::HashMap<String, SchoolAccount> = 
-                    cloned_accounts.iter().cloned()
-                        .map(|acc| (acc.school_id.clone(), acc))
-                        .collect();
-                
-                (cloned_accounts.first()
-                    .map(|acc| acc.school_id.clone())
-                    .unwrap_or_default(), 
-                info)
-            })
-            .collect();
+        // Dynamic Semaphore with adaptive worker count
+        let semaphore = Arc::new(Semaphore::new(workers * 2)); // Double the number of permits
         
-        let db_path = self.db_path.clone();
-        let headers = Arc::new(headers);
-        let db_state = self.db_state.clone(); // Clone the state
-
-        // Process chunks in parallel
-        records.par_chunks(chunk_size)
-            .for_each_with(
-                (work_sender.clone(), processing_errors.clone()),
-                |(sender, errors), chunk| {
-                    // Create a new connection for each thread
-                    let mut thread_conn = Connection::open(&db_path)
-                        .expect("Failed to create thread connection");
-                    let transformer = CsvTransformer::new(&headers, Arc::clone(&self.db_state));
-
-                    for record in chunk {
-                        match transformer.transform_record(record) {
-                            Ok(mut create_request) => {
-                                // Add semester_id to the create_request if provided
-                                if let Some(last_updated_semester_id) = last_updated_semester_id {
-                                    create_request.last_updated_semester_id = Some(last_updated_semester_id);
-                                }
-            
-                                let work_item = {
-                                    let existing_match = existing_accounts_map.get(&create_request.school_id)
-                                        .and_then(|existing| existing.existing_accounts.first());
-                                    
-                                    match existing_match {
-                                        Some(account) => {
-                                            // For existing accounts, always try to update
-                                            WorkItem::Update(account.id, create_request.clone())
-                                        },
-                                        None => WorkItem::Create(create_request)
-                                    }
-                                };
-            
-                                if sender.send(work_item).is_err() {
-                                    errors.lock().unwrap().push("Failed to send work item".to_string());
-                                }
-                            }
-                            Err(e) => {
-                                errors.lock().unwrap().push(format!("Transform error: {}", e));
-                            }
-                        }
-                    }
-                }
-            );
-
-        // Close the work channel to signal workers to finish
-        drop(work_sender);
-
-        // Collect results
-        let mut successful = 0;
-        let mut failed = 0;
-        let mut errors = processing_errors.lock().unwrap().clone();
-
-        // Wait for all workers to complete and collect their results
-        for _ in 0..workers.len() {
-            if let Ok((success, failure, worker_errors)) = result_receiver.recv() {
-                successful += success;
-                failed += failure;
-                errors.extend(worker_errors);
-            }
-        }
-
-        // Wait for all worker threads to finish
-        for worker in workers {
-            worker.join().unwrap();
-        }
-
-        ProcessingResult {
-            successful,
-            failed,
-            errors,
-        }
-    }
-
-    fn spawn_workers(
-        &self,
-        work_receiver: Receiver<WorkItem>,
-        result_sender: Sender<(usize, usize, Vec<String>)>,
-    ) -> Vec<thread::JoinHandle<()>> {
-        let db_path = self.db_path.clone();
-        
-        (0..self.num_workers)
-            .map(|_| {
-                let work_receiver = work_receiver.clone();
-                let result_sender = result_sender.clone();
-                let db_path = db_path.clone();
-
-                thread::spawn(move || {
-                    let mut successful = 0;
-                    let mut failed = 0;
-                    let mut errors = Vec::new();
-
-                    let repo = SqliteSchoolAccountRepository;
-                    
-                    // Create a new connection for each worker thread with mut
-                    let mut connection = Connection::open(&db_path)
-                        .expect("Failed to create worker connection");
-                    let tx = connection.transaction().unwrap();
-
-                    while let Ok(work_item) = work_receiver.recv() {
-                        match work_item {
-                            WorkItem::Create(create_request) => {
-                                match repo.create_school_account(&tx, create_request.clone()) {
-                                    Ok(_) => successful += 1,
-                                    Err(e) => {
-                                        // Optional: Check for unique constraint violation
-                                        if !e.to_string().contains("UNIQUE constraint failed") {
+        let processing_result = Arc::new(Mutex::new(ProcessingResult {
+            successful: 0,
+            failed: 0,
+            errors: Vec::new(),
+        }));
+    
+        let futures: Vec<_> = records
+            .chunks(chunk_size)
+            .map(|chunk| {
+                let chunk = chunk.to_vec();
+                let headers = headers.clone();
+                let existing_accounts = existing_accounts.clone();
+                let last_updated_semester_id = last_updated_semester_id;
+                let db_state = Arc::clone(&self.db_state);
+                let result_ref = Arc::clone(&processing_result);
+                let pool = db_state.0.pool.clone();
+                let permit = semaphore.clone().acquire_owned();
+    
+                task::spawn(async move {
+                    let _permit = permit.await.unwrap();
+    
+                    let process_chunk = || -> Result<ProcessingResult, Box<dyn std::error::Error>> {
+                        let mut connection = pool.get()
+                            .map_err(|e| format!("Failed to get connection: {}", e))?;
+    
+                        let transformer = CsvTransformer::new(&headers, Arc::clone(&db_state));
+                        let mut successful = 0;
+                        let mut failed = 0;
+                        let mut errors = Vec::new();
+    
+                        for record in &chunk {
+                            match transformer.transform_record(record) {
+                                Ok(create_request) => {
+                                    let operation_result = Self::retry_operation(|| {
+                                        let tx = connection.transaction()
+                                            .map_err(|e| format!("Transaction error: {}", e))?;
+                                        
+                                        let repo = SqliteSchoolAccountRepository;
+                                        
+                                        match repo.create_school_account(&tx, create_request.clone()) {
+                                            Ok(_) => {
+                                                tx.commit()
+                                                    .map_err(|e| format!("Commit error: {}", e))?;
+                                                Ok(true)
+                                            }
+                                            Err(e) => Err(e.to_string())
+                                        }
+                                    }, 3);
+    
+                                    match operation_result {
+                                        Ok(_) => successful += 1,
+                                        Err(e) => {
                                             failed += 1;
-                                            errors.push(format!(
-                                                "Failed to create account for {}: {}", 
-                                                create_request.school_id, 
-                                                e
-                                            ));
+                                            errors.push(e);
                                         }
                                     }
                                 }
-                            }
-                            WorkItem::Update(id, update_request) => {
-                                match repo.update_school_account(&tx, id, update_request.into()) {
-                                    Ok(_) => successful += 1,
-                                    Err(e) => {
-                                        // Ignore unique constraint errors during update
-                                        if !e.to_string().contains("UNIQUE constraint failed") {
-                                            failed += 1;
-                                            errors.push(format!(
-                                                "Failed to update account {}: {}", 
-                                                id, 
-                                                e
-                                            ));
-                                        }
-                                    }
+                                Err(e) => {
+                                    failed += 1;
+                                    errors.push(e.to_string());
                                 }
                             }
                         }
+    
+                        Ok(ProcessingResult { 
+                            successful, 
+                            failed, 
+                            errors 
+                        })
+                    };
+    
+                    match Self::retry_operation(process_chunk, 3) {
+                        Ok(chunk_result) => {
+                            let mut result = result_ref.lock().unwrap();
+                            result.successful += chunk_result.successful;
+                            result.failed += chunk_result.failed;
+                            result.errors.extend(chunk_result.errors);
+                        }
+                        Err(e) => {
+                            let mut result = result_ref.lock().unwrap();
+                            result.failed += chunk.len();
+                            result.errors.push(e.to_string());
+                        }
                     }
-
-                    // Commit the transaction
-                    if let Err(e) = tx.commit() {
-                        errors.push(format!("Failed to commit transaction: {}", e));
-                    }
-
-                    // Send results back
-                    let _ = result_sender.send((successful, failed, errors));
                 })
             })
-            .collect()
+            .collect();
+    
+        futures::future::join_all(futures).await;
+    
+        Arc::try_unwrap(processing_result)
+            .unwrap()
+            .into_inner()
+            .unwrap()
     }
 }
 
-pub fn process_csv_with_progress<F>(
+// Preserve the existing progress async method
+pub async fn process_csv_with_progress_async<F>(
     processor: &ParallelCsvProcessor,
     records: Vec<StringRecord>,
     headers: StringRecord,
     existing_accounts: Vec<ExistingAccountInfo>,
     progress_callback: F,
     last_updated_semester_id: Option<Uuid>,  // Add last_updated_semester_id parameter
-    db_state: &State<DbState>
 ) -> ProcessingResult 
 where
-    F: Fn(f32) + Send + 'static
+    F: Fn(f32) + Send + Sync + 'static,
 {
     let total_records = records.len();
     let chunk_size = 1000;
@@ -282,12 +313,14 @@ where
     };
 
     for (i, chunk) in records.chunks(chunk_size).enumerate() {
-        let result = processor.process_csv_data(
-            chunk.to_vec(),
-            headers.clone(),
-            existing_accounts.clone(),
-            last_updated_semester_id
-        );
+        let result = processor
+            .process_csv_data_async(
+                chunk.to_vec(),
+                headers.clone(),
+                existing_accounts.clone(),
+                last_updated_semester_id,
+            )
+            .await; // Await the async call here
 
         overall_result.successful += result.successful;
         overall_result.failed += result.failed;

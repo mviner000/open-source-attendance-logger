@@ -6,7 +6,7 @@ use crate::DbState;
 use crate::db::csv_import::{CsvValidator, CsvValidationResult};
 use crate::db::csv_transform::{CsvTransformer, batch_transform_records};
 use crate::db::school_accounts::{SchoolAccount, CreateSchoolAccountRequest};
-use crate::parallel_csv_processor::process_csv_with_progress;
+use crate::parallel_csv_processor::process_csv_with_progress_async;
 use crate::parallel_csv_processor::ParallelCsvProcessor;
 use crate::parallel_csv_validator::ParallelCsvValidator;
 use crate::db::csv_import::ValidationErrorType;
@@ -316,18 +316,18 @@ pub async fn import_csv_file_parallel(
     state: State<'_, DbState>,
     file_path: String,
     last_updated_semester_id: Uuid,
-    force_update: bool
+    force_update: bool,
 ) -> Result<CsvImportResponse, String> {
     // Get multiple connections from the pool
     let validator_conn = state.0.pool.get()
         .map_err(|e| format!("Failed to get validator connection: {}", e))?;
-    let mut deactivate_conn = state.0.pool.get()
+    let deactivate_conn = state.0.pool.get()
         .map_err(|e| format!("Failed to get deactivate connection: {}", e))?;
-    let mut processor_conn = state.0.pool.get()
+    let processor_conn = state.0.pool.get()
         .map_err(|e| format!("Failed to get processor connection: {}", e))?;
-    let mut main_conn = state.0.pool.get()
+    let main_conn = state.0.pool.get()
         .map_err(|e| format!("Failed to get main connection: {}", e))?;
-    let mut check_conn = state.0.pool.get()
+    let check_conn = state.0.pool.get()
         .map_err(|e| format!("Failed to get check connection: {}", e))?;
     
     // Create validator with the connection
@@ -338,11 +338,9 @@ pub async fn import_csv_file_parallel(
     // Read CSV file
     let mut rdr = csv::Reader::from_path(&file_path)
         .map_err(|e| format!("Failed to read CSV: {}", e))?;
-    
     let headers = rdr.headers()
         .map_err(|e| format!("Failed to read headers: {}", e))?
         .clone();
-    
     let records: Vec<StringRecord> = rdr.records()
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Error reading CSV records: {}", e))?;
@@ -363,15 +361,14 @@ pub async fn import_csv_file_parallel(
 
         deactivate_conn.execute(
             &deactivate_query, 
-            school_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect::<Vec<_>>().as_slice()
+            school_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect::<Vec<_>>().as_slice(),
         ).map_err(|e| format!("Failed to deactivate accounts not in CSV: {}", e))?;
     }
 
     // Get existing accounts info
-    let existing_accounts = match check_existing_accounts(state.clone(), file_path.clone()).await {
-        Ok(info) => info,
-        Err(e) => return Err(format!("Failed to check existing accounts: {}", e)),
-    };
+    let existing_accounts = check_existing_accounts(state.clone(), file_path.clone())
+        .await
+        .map_err(|e| format!("Failed to check existing accounts: {}", e))?;
 
     // Initialize parallel processor with a new connection
     let processor = ParallelCsvProcessor::new(&processor_conn, None, &state);
@@ -387,20 +384,24 @@ pub async fn import_csv_file_parallel(
         });
     };
 
-    // Process the CSV data with parallel processor
-    let processing_result = process_csv_with_progress(
+    // Process the CSV data asynchronously
+    let processing_result = process_csv_with_progress_async(
         &processor,
         records.clone(),
         headers.clone(),
-        vec![existing_accounts.clone()],
+        vec![existing_accounts.clone()], // Corrected here
         progress_callback,
         Some(last_updated_semester_id),
-        &state
-    );
+    ).await;    
 
     // Use a new transaction for account activation/update
+    let mut main_conn = state.0.pool.get()
+    .map_err(|e| format!("Failed to get connection: {}", e))?;
+
+    // Start a transaction
     let mut tx = main_conn.transaction()
-    .map_err(|e| format!("Failed to start transaction: {}", e))?;
+        .map_err(|e| format!("Failed to start transaction: {}", e))?;
+
 
     let mut activated_accounts = 0;
     
@@ -420,13 +421,13 @@ pub async fn import_csv_file_parallel(
                         state.0.school_accounts.update_school_account(
                             &tx, 
                             existing_account.id, 
-                            create_request.clone().into()
+                            create_request.clone().into(),
                         ).map_err(|e| format!("Failed to update account {}: {}", school_id, e))?;
                         
                         // Activate account
                         tx.execute(
                             "UPDATE school_accounts SET is_active = 1 WHERE id = ?1",
-                            [&existing_account.id.to_string()]
+                            [&existing_account.id.to_string()],
                         ).map_err(|e| format!("Failed to activate account: {}", e))?;
                         
                         activated_accounts += 1;
@@ -453,7 +454,7 @@ pub async fn import_csv_file_parallel(
     let total_accounts_after: usize = main_conn.query_row(
         "SELECT COUNT(*) FROM school_accounts",
         [],
-        |row| row.get(0)
+        |row| row.get(0),
     ).map_err(|e| format!("Failed to count total accounts: {}", e))?;
     
     let deactivated_accounts = total_accounts_after - activated_accounts;
