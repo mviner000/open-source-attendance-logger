@@ -3,7 +3,8 @@
 use tauri::State;
 use crate::DbState;
 use crate::db::notes::{Note, CreateNoteRequest, UpdateNoteRequest};
-use rusqlite::Result;
+use rusqlite::{Result, Error as RusqliteError};
+use std::sync::Arc;
 
 #[tauri::command]
 pub async fn create_note(
@@ -12,21 +13,31 @@ pub async fn create_note(
     username: String,
     password: String
 ) -> Result<Note, String> {
-    let conn = state.0.get_cloned_connection();
+    let db = state.0.clone();
+    let notes = db.notes.clone(); // Clone the NotesDatabase
+    let auth = db.auth.clone();
     
-    if state.0.auth.authenticate(&conn, &username, &password)? {
-        state.0.notes.create_note(&conn, note)
-    } else {
-        Err("Authentication failed".to_string())
-    }
+    db.with_connection(move |conn| {
+        if auth.authenticate(conn, &username, &password)? {
+            notes.create_note(conn, note)
+                .map_err(|e| RusqliteError::InvalidQuery)
+        } else {
+            Err(RusqliteError::QueryReturnedNoRows)
+        }
+    }).await.map_err(|e| format!("Authentication failed: {}", e.to_string()))
 }
 
 #[tauri::command]
 pub async fn get_all_notes(
     state: State<'_, DbState>
 ) -> Result<Vec<Note>, String> {
-    let conn = state.0.get_cloned_connection();
-    state.0.notes.get_all_notes(&conn)
+    let db = state.0.clone();
+    let notes = db.notes.clone(); // Clone the NotesDatabase
+    
+    db.with_connection(move |conn| {
+        notes.get_all_notes(conn)
+            .map_err(|_| RusqliteError::InvalidQuery)
+    }).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -34,8 +45,13 @@ pub async fn get_note(
     state: State<'_, DbState>,
     id: i64
 ) -> Result<Note, String> {
-    let conn = state.0.get_cloned_connection();
-    state.0.notes.get_note(&conn, id)
+    let db = state.0.clone();
+    let notes = db.notes.clone(); // Clone the NotesDatabase
+    
+    db.with_connection(move |conn| {
+        notes.get_note(conn, id)
+            .map_err(|_| RusqliteError::InvalidQuery)
+    }).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -46,13 +62,18 @@ pub async fn update_note(
     username: String,
     password: String
 ) -> Result<Note, String> {
-    let conn = state.0.get_cloned_connection();
+    let db = state.0.clone();
+    let notes = db.notes.clone(); // Clone the NotesDatabase
+    let auth = db.auth.clone();
     
-    if state.0.auth.authenticate(&conn, &username, &password)? {
-        state.0.notes.update_note(&conn, id, note)
-    } else {
-        Err("Authentication failed".to_string())
-    }
+    db.with_connection(move |conn| {
+        if auth.authenticate(conn, &username, &password)? {
+            notes.update_note(conn, id, note)
+                .map_err(|_| RusqliteError::InvalidQuery)
+        } else {
+            Err(RusqliteError::QueryReturnedNoRows)
+        }
+    }).await.map_err(|e| format!("Authentication failed: {}", e.to_string()))
 }
 
 #[tauri::command]
@@ -62,13 +83,18 @@ pub async fn delete_note(
     username: String,
     password: String
 ) -> Result<(), String> {
-    let conn = state.0.get_cloned_connection();
+    let db = state.0.clone();
+    let notes = db.notes.clone(); // Clone the NotesDatabase
+    let auth = db.auth.clone();
     
-    if state.0.auth.authenticate(&conn, &username, &password)? {
-        state.0.notes.delete_note(&conn, id)
-    } else {
-        Err("Authentication failed".to_string())
-    }
+    db.with_connection(move |conn| {
+        if auth.authenticate(conn, &username, &password)? {
+            notes.delete_note(conn, id)
+                .map_err(|_| RusqliteError::InvalidQuery)
+        } else {
+            Err(RusqliteError::QueryReturnedNoRows)
+        }
+    }).await.map_err(|e| format!("Authentication failed: {}", e.to_string()))
 }
 
 #[tauri::command]
@@ -76,6 +102,11 @@ pub async fn search_notes(
     state: State<'_, DbState>,
     query: String
 ) -> Result<Vec<Note>, String> {
-    let conn = state.0.get_cloned_connection();
-    state.0.notes.search_notes(&conn, &query)
+    let db = state.0.clone();
+    let notes = db.notes.clone(); // Clone the NotesDatabase
+    
+    db.with_connection(move |conn| {
+        notes.search_notes(conn, &query)
+            .map_err(|_| RusqliteError::InvalidQuery)
+    }).await.map_err(|e| e.to_string())
 }

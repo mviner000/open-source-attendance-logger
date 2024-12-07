@@ -1,4 +1,3 @@
-// src/first_launch.rs
 use std::fs;
 use log::info;
 use rusqlite::Connection;
@@ -33,16 +32,15 @@ fn create_initial_purposes(conn: &Connection) -> Result<(), String> {
             Err(rusqlite::Error::QueryReturnedNoRows) => {
                 // Purpose doesn't exist, so create it
                 purpose_repo.create_purpose(conn, purpose_req.clone())
-                    .map_err(|e| format!("Failed to create purpose {}: {}", purpose_req.label, e))?;
+                    .map_err(|e| format!("Failed to create purpose {}: {}", purpose_req.label, e.to_string()))?;
                 info!("Created initial purpose: {}", purpose_req.label);
             }
-            Err(e) => return Err(format!("Error checking purpose existence: {}", e)),
+            Err(e) => return Err(format!("Error checking purpose existence: {}", e.to_string())),
         }
     }
 
     Ok(())
 }
-
 
 pub fn handle_first_launch(_app_handle: &AppHandle) -> Result<(), String> {
     info!("Checking for first launch configuration...");
@@ -53,7 +51,7 @@ pub fn handle_first_launch(_app_handle: &AppHandle) -> Result<(), String> {
     
     // Initialize storage directories
     storage.initialize()
-        .map_err(|e| format!("Failed to initialize storage directories: {}", e))?;
+        .map_err(|e| format!("Failed to initialize storage directories: {}", e.to_string()))?;
     
     // Check if database_name.txt already exists
     if let Ok(existing_db_name) = config::load_database_name() {
@@ -66,32 +64,36 @@ pub fn handle_first_launch(_app_handle: &AppHandle) -> Result<(), String> {
         .map_err(|_| "No existing database and config file not found".to_string())?;
     
     // Save database name to database_name.txt
-    config::save_database_name(&config.database.database_name)?;
+    config::save_database_name(&config.database.database_name)
+        .map_err(|e| e.to_string())?;
     
     // Get database path
     let db_path = storage.get_database_path(&config.database.database_name);
     
     // Open database connection
     let conn = Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+        .map_err(|e| e.to_string())?;
     
     // Initialize auth database
     let auth_db = AuthDatabase::init(&conn)
-        .map_err(|e| format!("Failed to initialize auth database: {}", e))?;
+        .map_err(|e| e.to_string())?;
 
     // Create purposes table BEFORE trying to create initial purposes
     crate::db::purpose::create_purposes_table(&conn)
-        .map_err(|e| format!("Failed to create purposes table: {}", e))?;
+        .map_err(|e| e.to_string())?;
     
     // Create initial user if not exists
-    if !auth_db.user_exists(&conn)? {
+    if !auth_db.user_exists(&conn)
+        .map_err(|e| e.to_string())? 
+    {
         info!("Creating initial user in database");
         let auth_credentials = AuthCredentials {
             username: config.username.clone(),
             password: config.password.clone(),
         };
         
-        auth_db.create_user(&conn, &auth_credentials)?;
+        auth_db.create_user(&conn, &auth_credentials)
+            .map_err(|e| e.to_string())?;
     }
 
     // Create initial purposes
@@ -101,7 +103,7 @@ pub fn handle_first_launch(_app_handle: &AppHandle) -> Result<(), String> {
     let config_path = storage.get_config_file_path();
     if config_path.exists() {
         fs::remove_file(&config_path)
-            .map_err(|e| format!("Failed to delete config file: {}", e))?;
+            .map_err(|e| format!("Failed to delete config file: {}", e.to_string()))?;
         info!("Successfully deleted config file after initial setup");
     }
     

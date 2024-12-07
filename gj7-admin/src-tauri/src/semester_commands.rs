@@ -3,7 +3,7 @@ use tauri::State;
 use uuid::Uuid;
 use crate::DbState;
 use crate::db::semester::{Semester, CreateSemesterRequest};
-use rusqlite::Result;
+use rusqlite::{Result, Error as RusqliteError};
 
 #[tauri::command]
 pub async fn create_semester(
@@ -12,22 +12,31 @@ pub async fn create_semester(
     username: String,
     password: String
 ) -> Result<Semester, String> {
-    let conn = state.0.get_cloned_connection();
-    if state.0.auth.authenticate(&conn, &username, &password)? {
-        state.0.semester_repository.create_semester(&conn, semester)
-            .map_err(|e| e.to_string())
-    } else {
-        Err("Authentication failed".to_string())
-    }
+    let db = state.0.clone();
+    let semester_repo = db.semester_repository.clone();
+    let auth = db.auth.clone();
+    
+    db.with_connection(move |conn| {
+        if auth.authenticate(conn, &username, &password)? {
+            semester_repo.create_semester(conn, semester)
+                .map_err(|_| RusqliteError::InvalidQuery)
+        } else {
+            Err(RusqliteError::QueryReturnedNoRows)
+        }
+    }).await.map_err(|e| format!("Authentication failed: {}", e.to_string()))
 }
 
 #[tauri::command]
 pub async fn get_all_semesters(
     state: State<'_, DbState>
 ) -> Result<Vec<Semester>, String> {
-    let conn = state.0.get_cloned_connection();
-    state.0.semester_repository.get_all_semesters(&conn)
-        .map_err(|e| e.to_string())
+    let db = state.0.clone();
+    let semester_repo = db.semester_repository.clone();
+    
+    db.with_connection(move |conn| {
+        semester_repo.get_all_semesters(conn)
+            .map_err(|_| RusqliteError::InvalidQuery)
+    }).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -37,9 +46,14 @@ pub async fn get_semester(
 ) -> Result<Semester, String> {
     let semester_id = Uuid::parse_str(&id)
         .map_err(|e| format!("Invalid UUID format: {}", e))?;
-    let conn = state.0.get_cloned_connection();
-    state.0.semester_repository.get_semester(&conn, semester_id)
-        .map_err(|e| e.to_string())
+    
+    let db = state.0.clone();
+    let semester_repo = db.semester_repository.clone();
+    
+    db.with_connection(move |conn| {
+        semester_repo.get_semester(conn, semester_id)
+            .map_err(|_| RusqliteError::InvalidQuery)
+    }).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -47,9 +61,13 @@ pub async fn get_semester_by_label(
     state: State<'_, DbState>,
     label: String
 ) -> Result<Semester, String> {
-    let conn = state.0.get_cloned_connection();
-    state.0.semester_repository.get_semester_by_label(&conn, &label)
-        .map_err(|e| e.to_string())
+    let db = state.0.clone();
+    let semester_repo = db.semester_repository.clone();
+    
+    db.with_connection(move |conn| {
+        semester_repo.get_semester_by_label(conn, &label)
+            .map_err(|_| RusqliteError::InvalidQuery)
+    }).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -62,13 +80,19 @@ pub async fn update_semester(
 ) -> Result<Semester, String> {
     let semester_id = Uuid::parse_str(&id)
         .map_err(|e| format!("Invalid UUID format: {}", e))?;
-    let conn = state.0.get_cloned_connection();
-    if state.0.auth.authenticate(&conn, &username, &password)? {
-        state.0.semester_repository.update_semester(&conn, semester_id, semester)
-            .map_err(|e| e.to_string())
-    } else {
-        Err("Authentication failed".to_string())
-    }
+    
+    let db = state.0.clone();
+    let semester_repo = db.semester_repository.clone();
+    let auth = db.auth.clone();
+    
+    db.with_connection(move |conn| {
+        if auth.authenticate(conn, &username, &password)? {
+            semester_repo.update_semester(conn, semester_id, semester)
+                .map_err(|_| RusqliteError::InvalidQuery)
+        } else {
+            Err(RusqliteError::QueryReturnedNoRows)
+        }
+    }).await.map_err(|e| format!("Authentication failed: {}", e.to_string()))
 }
 
 #[tauri::command]
@@ -80,13 +104,19 @@ pub async fn delete_semester(
 ) -> Result<(), String> {
     let semester_id = Uuid::parse_str(&id)
         .map_err(|e| format!("Invalid UUID format: {}", e))?;
-    let conn = state.0.get_cloned_connection();
-    if state.0.auth.authenticate(&conn, &username, &password)? {
-        state.0.semester_repository.delete_semester(&conn, semester_id)
-            .map_err(|e| e.to_string())
-    } else {
-        Err("Authentication failed".to_string())
-    }
+    
+    let db = state.0.clone();
+    let semester_repo = db.semester_repository.clone();
+    let auth = db.auth.clone();
+    
+    db.with_connection(move |conn| {
+        if auth.authenticate(conn, &username, &password)? {
+            semester_repo.delete_semester(conn, semester_id)
+                .map_err(|_| RusqliteError::InvalidQuery)
+        } else {
+            Err(RusqliteError::QueryReturnedNoRows)
+        }
+    }).await.map_err(|e| format!("Authentication failed: {}", e.to_string()))
 }
 
 #[tauri::command]
@@ -98,11 +128,17 @@ pub async fn set_active_semester(
 ) -> Result<Semester, String> {
     let semester_id = Uuid::parse_str(&id)
         .map_err(|e| format!("Invalid UUID format: {}", e))?;
-    let conn = state.0.get_cloned_connection();
-    if state.0.auth.authenticate(&conn, &username, &password)? {
-        state.0.semester_repository.set_active_semester(&conn, semester_id)
-            .map_err(|e| e.to_string())
-    } else {
-        Err("Authentication failed".to_string())
-    }
+    
+    let db = state.0.clone();
+    let semester_repo = db.semester_repository.clone();
+    let auth = db.auth.clone();
+    
+    db.with_connection(move |conn| {
+        if auth.authenticate(conn, &username, &password)? {
+            semester_repo.set_active_semester(conn, semester_id)
+                .map_err(|_| RusqliteError::InvalidQuery)
+        } else {
+            Err(RusqliteError::QueryReturnedNoRows)
+        }
+    }).await.map_err(|e| format!("Authentication failed: {}", e.to_string()))
 }

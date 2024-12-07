@@ -22,7 +22,7 @@ pub struct CreateSemesterRequest {
     pub is_active: Option<bool>,
 }
 
-pub trait SemesterRepository {
+pub trait SemesterRepository: Send + Sync {
     fn create_semester(&self, conn: &Connection, semester: CreateSemesterRequest) -> Result<Semester>;
     fn get_semester(&self, conn: &Connection, id: Uuid) -> Result<Semester>;
     fn get_semester_by_label(&self, conn: &Connection, label: &str) -> Result<Semester>;
@@ -31,11 +31,24 @@ pub trait SemesterRepository {
     fn get_all_semesters(&self, conn: &Connection) -> Result<Vec<Semester>>;
     fn set_active_semester(&self, conn: &Connection, id: Uuid) -> Result<Semester>;
     fn get_active_semester(&self, conn: &Connection) -> Result<Option<Semester>>;
+    fn box_clone(&self) -> Box<dyn SemesterRepository + Send + Sync>;
+
+}
+
+impl Clone for Box<dyn SemesterRepository + Send + Sync> {
+    fn clone(&self) -> Self {
+        self.box_clone()
+    }
 }
 
 pub struct SqliteSemesterRepository;
 
 impl SemesterRepository for SqliteSemesterRepository {
+    fn box_clone(&self) -> Box<dyn SemesterRepository + Send + Sync> {
+        Box::new(SqliteSemesterRepository)
+
+    }
+
     fn get_active_semester(&self, conn: &Connection) -> Result<Option<Semester>> {
         let result = conn.query_row(
             "SELECT * FROM semesters WHERE is_active = 1",

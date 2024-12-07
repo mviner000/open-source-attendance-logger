@@ -44,16 +44,19 @@ async fn authenticate(
     username: String,
     password: String
 ) -> Result<bool, String> {
-    let conn = state.0.get_cloned_connection();
-    state.0.auth.authenticate(&conn, &username, &password)
+    state.0.with_connection(|conn| {
+        state.0.auth.authenticate(conn, &username, &password)
+    }).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn get_credentials(
     state: tauri::State<'_, DbState>,
 ) -> Result<Credentials, String> {
-    let conn = state.0.get_cloned_connection();
-    state.0.auth.get_credentials(&conn)
+    let auth = state.0.auth.clone();
+    state.0.with_connection(move |conn| {
+        auth.get_credentials(conn)
+    }).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

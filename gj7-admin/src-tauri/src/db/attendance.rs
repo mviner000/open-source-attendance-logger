@@ -31,7 +31,8 @@ pub struct UpdateAttendanceRequest {
     pub purpose_label: Option<String>,
 }
 
-pub trait AttendanceRepository: Send {
+pub trait AttendanceRepository: Send + Sync {
+    fn clone_box(&self) -> Box<dyn AttendanceRepository + Send + Sync>;
     fn create_attendance(&self, conn: &Connection, attendance: CreateAttendanceRequest) -> Result<Attendance>;
     fn get_attendance(&self, conn: &Connection, id: Uuid) -> Result<Attendance>;
     fn get_attendances_by_school_id(&self, conn: &Connection, school_id: &str) -> Result<Vec<Attendance>>;
@@ -44,9 +45,20 @@ pub trait AttendanceRepository: Send {
     fn get_last_n_attendances(&self, conn: &Connection, n: usize) -> Result<Vec<Attendance>, rusqlite::Error>;
 }
 
+// Implement Clone for SqliteAttendanceRepository
+impl Clone for SqliteAttendanceRepository {
+    fn clone(&self) -> Self {
+        SqliteAttendanceRepository
+    }
+}
+
 pub struct SqliteAttendanceRepository;
 
 impl AttendanceRepository for SqliteAttendanceRepository {
+    fn clone_box(&self) -> Box<dyn AttendanceRepository + Send + Sync> {
+        Box::new(self.clone())
+    }
+    
     fn create_attendance(&self, conn: &Connection, attendance: CreateAttendanceRequest) -> Result<Attendance> {
         if attendance.school_id.is_empty() {
             let err = rusqlite::Error::InvalidParameterName("School ID cannot be empty".to_string());

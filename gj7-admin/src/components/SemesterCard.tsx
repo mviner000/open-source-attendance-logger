@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { SquarePen, Search, ChevronDown } from 'lucide-react';
+import { SquarePen, Search, ChevronDown, UsersRound, UserX, Users } from 'lucide-react';
 
 interface Semester {
   label: string;
@@ -61,11 +61,17 @@ export default function SemesterCard({
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
             <p className="text-sm font-medium">Active Accounts</p>
-            <p className="text-2xl font-bold">{accountCounts.active_count}</p>
+            <div className="flex text-2xl font-bold">
+              <UsersRound />
+              <span className='ml-1'>{accountCounts.active_count}</span>
+            </div>
           </div>
           <div>
             <p className="text-sm font-medium">Inactive Accounts</p>
-            <p className="text-2xl font-bold">{accountCounts.inactive_count}</p>
+            <div className="flex text-2xl font-bold">
+            <Users />
+            <span className='ml-1'>{accountCounts.inactive_count}</span>
+            </div>
           </div>
         </div>
         <Button 

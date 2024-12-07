@@ -1,12 +1,15 @@
 // src/parallel_csv_validator.rs
 
 use std::path::Path;
+use std::path::PathBuf;
 use std::fs::File;
 use std::io::{Read, BufReader};
 use std::sync::{Arc, Mutex};
 use csv::{Reader, StringRecord};
 use rayon::prelude::*;
+use r2d2::Pool;
 use rusqlite::Connection;
+use r2d2_sqlite::SqliteConnectionManager;
 use crate::db::csv_import::{
     CsvValidator, 
     CsvValidationResult, 
@@ -16,25 +19,42 @@ use crate::db::csv_import::{
 };
 
 pub struct ParallelCsvValidator {
-    connection_path: String,
+    connection_string: String,
     max_file_size: usize,
 }
 
+fn path_to_string(path: &Path) -> String {
+    path.to_str()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| path.to_string_lossy().into_owned())
+}
+
 impl ParallelCsvValidator {
-    pub fn new(connection: Connection) -> Self {
-        let conn_path = connection.path()
-            .map(|p| p.to_string()) // Use to_string() if p is &str
-            .unwrap_or_else(|| String::from(":memory:"));
-    
+    pub fn new(connection_pool: &Pool<SqliteConnectionManager>) -> Self {
+        // Get a pooled connection
+        let connection_string = connection_pool
+            .get()
+            .map(|conn| {
+                // Get the path as an Option<&str>
+                let path_option = conn.path(); // This returns Option<&str>
+                
+                // Convert Option<&str> to String
+                path_option
+                    .map(PathBuf::from) // Convert &str to PathBuf
+                    .map(|path_buf| path_to_string(path_buf.as_path())) // Convert PathBuf to &Path and then to String
+                    .unwrap_or_else(|| String::from(":memory:")) // Default to ":memory:" if None
+            })
+            .unwrap_or_else(|_| String::from(":memory:"));
+
         Self {
-            connection_path: conn_path,
-            max_file_size: 300 * 1024 * 1024, // 300MB
+            connection_string,
+            max_file_size: 300 * 1024 * 1024,
         }
     }
 
     pub fn validate_file(&self, file_path: &Path) -> Result<CsvValidationResult, Vec<ValidationError>> {
-        // Open a new connection using the stored path
-        let conn = Connection::open(&self.connection_path)
+        // Open a new connection using the stored connection string
+        let conn = Connection::open(&self.connection_string)
             .expect("Failed to open database connection");
     
         let mut errors = Vec::new();
@@ -137,7 +157,7 @@ impl ParallelCsvValidator {
     
         records.par_iter().enumerate().for_each(|(idx, record)| {
             // Create a new connection for each thread
-            let thread_conn = Connection::open(&self.connection_path)
+            let thread_conn = Connection::open(&self.connection_string) // Use connection_string here
                 .expect("Failed to open database connection");
             let csv_validator = CsvValidator::new(thread_conn);
     

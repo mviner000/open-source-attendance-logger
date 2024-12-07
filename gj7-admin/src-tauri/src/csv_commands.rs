@@ -9,6 +9,7 @@ use crate::db::school_accounts::{SchoolAccount, CreateSchoolAccountRequest};
 use crate::parallel_csv_processor::process_csv_with_progress;
 use crate::parallel_csv_processor::ParallelCsvProcessor;
 use crate::parallel_csv_validator::ParallelCsvValidator;
+use crate::db::csv_import::ValidationErrorType;
 use crate::logger::{emit_log, LogMessage};
 use std::sync::Arc;
 use csv::StringRecord;
@@ -47,7 +48,7 @@ pub struct CsvImportResponse {
 pub struct ValidationErrorDetails {
     row_number: usize,
     field: Option<String>,
-    error_type: String,
+    error_type: ValidationErrorType,
     error_message: String,
 }
 
@@ -58,9 +59,6 @@ pub async fn check_existing_accounts(
 ) -> Result<ExistingAccountInfo, String> {
     let path = Path::new(&file_path);
     
-    // Get a connection
-    let conn = state.0.get_cloned_connection();
-    
     // Prepare CSV reader
     let mut rdr = csv::Reader::from_path(path)
         .map_err(|e| format!("Failed to read CSV: {}", e))?;
@@ -69,10 +67,7 @@ pub async fn check_existing_accounts(
     let headers = rdr.headers()
         .map_err(|e| format!("Failed to read headers: {}", e))?;
     
-    // Get another connection for the transformer
-    let conn_transform = state.0.get_cloned_connection();
-    
-    // Create transformer with headers and connection
+    // Create transformer with connection and headers
     let transformer = CsvTransformer::new(&headers, Arc::new(DbState(state.0.clone())));
     
     // Collect records
@@ -80,47 +75,43 @@ pub async fn check_existing_accounts(
         .filter_map(Result::ok)
         .collect();
     
-    // Batch transform records
-    let batch_size = 100; // Configurable batch size
-    let batched_records = batch_transform_records(&transformer, &records, batch_size);
-    
     // Prepare to track existing and new accounts
     let mut existing_accounts = Vec::new();
     let mut new_accounts_count = 0;
     
-    // Check each record
+    // Process records in batches
+    let batch_size = 100;
+    let batched_records = batch_transform_records(&transformer, &records, batch_size);
+    
     for batch in batched_records {
-        let conn = state.0.get_cloned_connection();
-        
-        for result in batch {
-            match result {
-                Ok(account_request) => {
-                    // Check if account already exists
-                    match state.0.school_accounts.get_school_account_by_school_id(&conn, &account_request.school_id) {
-                        Ok(existing_account) => {
-                            existing_accounts.push(existing_account);
-                        },
-                        Err(_) => {
-                            // Account doesn't exist
-                            new_accounts_count += 1;
+        // Use with_connection for each batch
+        state.0.with_connection(|conn| {
+            for result in batch {
+                match result {
+                    Ok(account_request) => {
+                        // Check if account exists
+                        match state.0.school_accounts.get_school_account_by_school_id(conn, &account_request.school_id) {
+                            Ok(existing_account) => {
+                                existing_accounts.push(existing_account);
+                            },
+                            Err(_) => {
+                                new_accounts_count += 1;
+                            }
                         }
-                    }
-                },
-                Err(_) => {
-                    // Skip transform errors for this check
-                    continue;
+                    },
+                    Err(_) => continue,
                 }
             }
-        }
+            Ok(())
+        }).await.map_err(|e| format!("Database error: {}", e))?;
     }
     
     Ok(ExistingAccountInfo {
-        existing_accounts: existing_accounts.clone(), // Create a clone to avoid move
+        existing_accounts: existing_accounts.clone(),
         new_accounts_count,
         existing_accounts_count: existing_accounts.len(),
     })
 }
-
 
 #[command]
 pub async fn validate_csv_file(
@@ -129,34 +120,27 @@ pub async fn validate_csv_file(
 ) -> Result<CsvValidationResult, Vec<ValidationErrorDetails>> {
     let path = Path::new(&file_path);
     
-    // Get a cloned connection
-    let conn = state.0.get_cloned_connection();
+    // Option 1: Use serial validator
+    // let validator = state.0.create_csv_validator();
     
-    // Create parallel validator with the connection
-    let validator = ParallelCsvValidator::new(conn);
-    
-    info!("Attempting to validate CSV file: {}", file_path);
+    // Option 2: Use parallel validator
+    let validator = state.0.create_parallel_csv_validator();
     
     match validator.validate_file(path) {
-        Ok(result) => {
-            info!("CSV file validation successful");
-            Ok(result)
-        },
-        Err(errors) => {
-            let serializable_errors: Vec<ValidationErrorDetails> = errors.into_iter().map(|error| {
-                ValidationErrorDetails {
+        Ok(validation_result) => Ok(validation_result),
+        Err(validation_errors) => Err(
+            validation_errors.into_iter()
+                .map(|error| ValidationErrorDetails {
                     row_number: error.row_number,
                     field: error.field,
-                    error_type: format!("{:?}", error.error_type),
+                    error_type: error.error_type,
                     error_message: error.error_message,
-                }
-            }).collect();
-            
-            error!("CSV file validation failed: {:?}", serializable_errors);
-            Err(serializable_errors)
-        }
+                })
+                .collect()
+        )
     }
 }
+
 
 #[command]
 pub async fn import_csv_file(
@@ -168,28 +152,19 @@ pub async fn import_csv_file(
 ) -> Result<CsvImportResponse, String> {
     let path = Path::new(&file_path);
     
-    // Get a connection using get_connection_blocking or get_cloned_connection
-    let conn = state.0.get_cloned_connection();
-    
-    // Pass the connection to CsvValidator
-    let validator = CsvValidator::new(conn);
-    
-    // First, validate the file
-    let validation_result = validator.validate_file(path)
+    // First validate the file using the parallel validator
+    let validation_result = state.0.create_parallel_csv_validator()
+        .validate_file(path)
         .map_err(|errors| format!("Validation failed: {:?}", errors))?;
     
-    // Prepare CSV reader
+    // Prepare CSV reader and headers
     let mut rdr = csv::Reader::from_path(path)
         .map_err(|e| format!("Failed to read CSV: {}", e))?;
     
-    // Get headers for transformer
     let headers = rdr.headers()
         .map_err(|e| format!("Failed to read headers: {}", e))?;
     
-    // Get another connection for the transformer
-    let conn = state.0.get_cloned_connection();
-    
-    // Create transformer with headers and connection
+    // Create transformer
     let transformer = CsvTransformer::new(&headers, Arc::new(DbState(state.0.clone())));
     
     // Collect records
@@ -197,218 +172,133 @@ pub async fn import_csv_file(
         .filter_map(Result::ok)
         .collect();
     
-    // Batch transform records
-    let batch_size = 100; // Configurable batch size
-    let batched_records = batch_transform_records(&transformer, &records, batch_size);
-    
-    // First, count total accounts before deactivation
-    let conn = state.0.get_cloned_connection();
-    let total_accounts_before: usize = conn.query_row(
-        "SELECT COUNT(*) FROM school_accounts",
-        [],
-        |row| row.get(0)
-    ).map_err(|e| format!("Failed to count total accounts: {}", e))?;
-    
-    // Count active accounts before deactivation
-    let active_accounts_before: usize = conn.query_row(
-        "SELECT COUNT(*) FROM school_accounts WHERE is_active = 1",
-        [],
-        |row| row.get(0)
-    ).map_err(|e| format!("Failed to count active accounts: {}", e))?;
+    // Get counts before deactivation
+    let (total_accounts_before, active_accounts_before) = state.0.with_connection(|conn| {
+        let total = conn.query_row(
+            "SELECT COUNT(*) FROM school_accounts",
+            [],
+            |row| row.get::<_, usize>(0)
+        )?;
+        let active = conn.query_row(
+            "SELECT COUNT(*) FROM school_accounts WHERE is_active = 1",
+            [],
+            |row| row.get::<_, usize>(0)
+        )?;
+        Ok((total, active))
+    }).await.map_err(|e| format!("Failed to get account counts: {}", e))?;
     
     // Deactivate all accounts
-    conn.execute(
-        "UPDATE school_accounts SET is_active = 0",
-        []
-    ).map_err(|e| format!("Failed to deactivate existing accounts: {}", e))?;
+    state.0.with_connection(|conn| {
+        conn.execute("UPDATE school_accounts SET is_active = 0", [])
+    }).await.map_err(|e| format!("Failed to deactivate accounts: {}", e))?;
     
-    // Collect school_ids from the CSV to be set as active
-    let mut school_ids_to_activate = Vec::new();
-    
-    // Prepare to track import results
+    // Process records
     let mut total_processed = 0;
     let mut successful_imports = 0;
     let mut failed_imports = 0;
     let mut error_details = Vec::new();
     let mut existing_accounts = Vec::new();
-
-    // new implementation for reference
-    emit_log(&app_handle, LogMessage {
-        timestamp: chrono::Utc::now().to_rfc3339(),
-        level: "INFO".to_string(),
-        message: format!("Importing CSV file: {}", file_path),
-        target: "csv_import".to_string(),
-    });
+    let mut school_ids_to_activate = Vec::new();
     
-    // Perform import for each batch
+    // Process in batches
+    let batch_size = 100;
+    let batched_records = batch_transform_records(&transformer, &records, batch_size);
+    
     for batch in batched_records {
-        let conn = state.0.get_cloned_connection();
-        
-        for result in batch {
-            total_processed += 1;
-            
-            match result {
-                Ok(mut account_request) => {
-                    // Collect school_id for activation
-                    school_ids_to_activate.push(account_request.school_id.clone());
-                    
-                    // Set the last_updated_last_updated_semester_id for each account
-                    account_request.last_updated_semester_id = Some(last_updated_semester_id);
-                    
-                    // Check if account exists
-                    match state.0.school_accounts.get_school_account_by_school_id(&conn, &account_request.school_id) {
-                        Ok(existing_account) => {
-                            // Account exists
-                            if force_update {
-                                // Update existing account
-                                match state.0.school_accounts.update_school_account(
-                                    &conn, 
-                                    existing_account.id, 
-                                    account_request.clone().into()
-                                ) {
-                                    Ok(updated_account) => {
-                                        // Emit a log message for successful update
-                                        emit_log(&app_handle, LogMessage {
-                                            timestamp: chrono::Utc::now().to_rfc3339(),
-                                            level: "INFO".to_string(),
-                                            message: format!(
-                                                "Successfully updated school account: ID={}, SchoolID={}",
-                                                updated_account.id,
-                                                updated_account.school_id
-                                            ),
-                                            target: "csv_import".to_string(),
-                                        });
-                                        
-                                        successful_imports += 1;
-                                        existing_accounts.push(updated_account);
-                                    },
-                                    Err(e) => {
-                                        // Emit a log message for update failure
-                                        emit_log(&app_handle, LogMessage {
-                                            timestamp: chrono::Utc::now().to_rfc3339(),
-                                            level: "ERROR".to_string(),
-                                            message: format!(
-                                                "Failed to update school account: SchoolID={}, Error={}",
-                                                account_request.school_id,
-                                                e
-                                            ),
-                                            target: "csv_import".to_string(),
-                                        });
-                                        
-                                        failed_imports += 1;
-                                        error_details.push(format!("Update failed for {}: {}", account_request.school_id, e));
+        state.0.with_connection(|conn| {
+            for result in batch {
+                total_processed += 1;
+                
+                match result {
+                    Ok(mut account_request) => {
+                        school_ids_to_activate.push(account_request.school_id.clone());
+                        account_request.last_updated_semester_id = Some(last_updated_semester_id);
+                        
+                        match state.0.school_accounts.get_school_account_by_school_id(conn, &account_request.school_id) {
+                            Ok(existing_account) => {
+                                if force_update {
+                                    match state.0.school_accounts.update_school_account(
+                                        conn,
+                                        existing_account.id,
+                                        account_request.clone().into()
+                                    ) {
+                                        Ok(updated_account) => {
+                                            successful_imports += 1;
+                                            existing_accounts.push(updated_account);
+                                        },
+                                        Err(e) => {
+                                            failed_imports += 1;
+                                            error_details.push(format!("Update failed for {}: {}", account_request.school_id, e));
+                                        }
                                     }
-                                }
-                            } else {
-                                // Emit a log message for skipped update
-                                emit_log(&app_handle, LogMessage {
-                                    timestamp: chrono::Utc::now().to_rfc3339(),
-                                    level: "WARN".to_string(),
-                                    message: format!(
-                                        "Skipped updating existing account: SchoolID={}",
-                                        account_request.school_id
-                                    ),
-                                    target: "csv_import".to_string(),
-                                });
-                                
-                                // Skip if not forced to update
-                                failed_imports += 1;
-                                error_details.push(format!("Account with school_id {} already exists", account_request.school_id));
-                            }
-                        },
-                        Err(_) => {
-                            // Account doesn't exist, create new
-                            match state.0.school_accounts.create_school_account(&conn, account_request.clone()) {
-                                Ok(new_account) => {
-                                    // Emit a log message for successful account creation
-                                    emit_log(&app_handle, LogMessage {
-                                        timestamp: chrono::Utc::now().to_rfc3339(),
-                                        level: "INFO".to_string(),
-                                        message: format!(
-                                            "Successfully created school account: ID={}, SchoolID={}",
-                                            new_account.id,
-                                            new_account.school_id
-                                        ),
-                                        target: "csv_import".to_string(),
-                                    });
-                                    
-                                    successful_imports += 1;
-                                },
-                                Err(e) => {
-                                    // Emit a log message for failed account creation
-                                    emit_log(&app_handle, LogMessage {
-                                        timestamp: chrono::Utc::now().to_rfc3339(),
-                                        level: "ERROR".to_string(),
-                                        message: format!(
-                                            "Failed to create school account: SchoolID={}, Error={}",
-                                            account_request.school_id,
-                                            e
-                                        ),
-                                        target: "csv_import".to_string(),
-                                    });
-                                    
+                                } else {
                                     failed_imports += 1;
-                                    error_details.push(format!("Import failed: {}", e));
+                                    error_details.push(format!("Account with school_id {} already exists", account_request.school_id));
+                                }
+                            },
+                            Err(_) => {
+                                match state.0.school_accounts.create_school_account(conn, account_request.clone()) {
+                                    Ok(_) => successful_imports += 1,
+                                    Err(e) => {
+                                        failed_imports += 1;
+                                        error_details.push(format!("Import failed: {}", e));
+                                    }
                                 }
                             }
                         }
+                    },
+                    Err(e) => {
+                        failed_imports += 1;
+                        error_details.push(format!("Transform error: {}", e));
                     }
-                },
-                Err(transform_error) => {
-                    failed_imports += 1;
-                    error_details.push(format!("Transform error: {}", transform_error));
                 }
             }
-        }
+            Ok(())
+        }).await.map_err(|e| format!("Database error: {}", e))?;
     }
     
-    // Activate the imported accounts
-    let activated_accounts = if !school_ids_to_activate.is_empty() {
-        let placeholders = school_ids_to_activate.iter().map(|_| "?").collect::<Vec<&str>>().join(",");
-        let activate_query = format!(
-            "UPDATE school_accounts SET is_active = 1 WHERE school_id IN ({})",
-            placeholders
-        );
-        
-        let conn = state.0.get_cloned_connection();
-        let params: Vec<&dyn rusqlite::ToSql> = school_ids_to_activate.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
-        
-        conn.execute(
-            &activate_query, 
-            params.as_slice()
-        ).map_err(|e| format!("Failed to activate imported accounts: {}", e))?;
-        
-        // Count activated accounts
-        let activated_count: usize = conn.query_row(
+    // Activate imported accounts
+    if !school_ids_to_activate.is_empty() {
+        state.0.with_connection(|conn| {
+            let placeholders = school_ids_to_activate.iter().map(|_| "?").collect::<Vec<&str>>().join(",");
+            let activate_query = format!(
+                "UPDATE school_accounts SET is_active = 1 WHERE school_id IN ({})",
+                placeholders
+            );
+            
+            let params: Vec<&dyn rusqlite::ToSql> = school_ids_to_activate.iter()
+                .map(|id| id as &dyn rusqlite::ToSql)
+                .collect();
+            
+            conn.execute(&activate_query, params.as_slice())
+        }).await.map_err(|e| format!("Failed to activate accounts: {}", e))?;
+    }
+    
+    // Get final counts
+    let (total_accounts_after, activated_accounts) = state.0.with_connection(|conn| {
+        let total = conn.query_row(
+            "SELECT COUNT(*) FROM school_accounts",
+            [],
+            |row| row.get::<_, usize>(0)
+        )?;
+        let active = conn.query_row(
             "SELECT COUNT(*) FROM school_accounts WHERE is_active = 1",
             [],
-            |row| row.get(0)
-        ).map_err(|e| format!("Failed to count activated accounts: {}", e))?;
-        
-        activated_count
-    } else {
-        0
-    };
-    
-    // Count total accounts and deactivated accounts
-    let conn = state.0.get_cloned_connection();
-    let total_accounts_after: usize = conn.query_row(
-        "SELECT COUNT(*) FROM school_accounts",
-        [],
-        |row| row.get(0)
-    ).map_err(|e| format!("Failed to count total accounts: {}", e))?;
+            |row| row.get::<_, usize>(0)
+        )?;
+        Ok((total, active))
+    }).await.map_err(|e| format!("Failed to get final counts: {}", e))?;
     
     let deactivated_accounts = total_accounts_after - activated_accounts;
-
-    // Prepare response
-    let import_response = CsvImportResponse {
-        validation_result,
+    
+    Ok(CsvImportResponse {
+        validation_result: validation_result,
         total_processed,
         successful_imports,
         failed_imports,
         error_details,
         existing_account_info: Some(ExistingAccountInfo {
-            existing_accounts: existing_accounts.clone(), 
+            existing_accounts: existing_accounts.clone(), // Clone the vector
             new_accounts_count: total_processed - existing_accounts.len(),
             existing_accounts_count: existing_accounts.len(),
         }),
@@ -417,17 +307,7 @@ pub async fn import_csv_file(
             activated_accounts,
             deactivated_accounts,
         }),
-    };
-    
-    info!("CSV import completed: {} total, {} successful, {} failed, Semester={}", 
-        total_processed, successful_imports, failed_imports, last_updated_semester_id);
-    
-    info!("Account Status Counts:");
-    info!("  Total Accounts: {}", total_accounts_after);
-    info!("  Activated Accounts: {}", activated_accounts);
-    info!("  Deactivated Accounts: {}", deactivated_accounts);
-    
-    Ok(import_response)
+    })
 }
 
 #[command]
@@ -438,15 +318,20 @@ pub async fn import_csv_file_parallel(
     last_updated_semester_id: Uuid,
     force_update: bool
 ) -> Result<CsvImportResponse, String> {
-    // Get multiple connections instead of relying on a single connection
-    let validator_conn = state.0.get_cloned_connection();
-    let mut deactivate_conn = state.0.get_cloned_connection();
-    let mut processor_conn = state.0.get_cloned_connection();
-    let mut main_conn = state.0.get_cloned_connection();
-    let mut check_conn = state.0.get_cloned_connection();
+    // Get multiple connections from the pool
+    let validator_conn = state.0.pool.get()
+        .map_err(|e| format!("Failed to get validator connection: {}", e))?;
+    let mut deactivate_conn = state.0.pool.get()
+        .map_err(|e| format!("Failed to get deactivate connection: {}", e))?;
+    let mut processor_conn = state.0.pool.get()
+        .map_err(|e| format!("Failed to get processor connection: {}", e))?;
+    let mut main_conn = state.0.pool.get()
+        .map_err(|e| format!("Failed to get main connection: {}", e))?;
+    let mut check_conn = state.0.pool.get()
+        .map_err(|e| format!("Failed to get check connection: {}", e))?;
     
     // Create validator with the connection
-    let validator = CsvValidator::new(validator_conn);
+    let validator = state.0.create_parallel_csv_validator();
     let validation_result = validator.validate_file(Path::new(&file_path))
         .map_err(|errors| format!("Validation failed: {:?}", errors))?;
     

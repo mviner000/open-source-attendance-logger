@@ -38,8 +38,9 @@ impl CsvTransformer {
     }
 
     pub fn transform_record(&self, record: &StringRecord) -> Result<CreateSchoolAccountRequest, TransformError> {
-        // Get a fresh connection when needed
-        let conn = self.db_state.0.get_cloned_connection();
+        // Get a connection from the pool
+        let conn = self.db_state.0.pool.get()
+            .map_err(|e| TransformError::DatabaseError(e.to_string()))?;
         
         // Helper function to map header to index
         let get_index = |header: &str| -> Option<usize> {
@@ -47,7 +48,7 @@ impl CsvTransformer {
                 .position(|h| h.to_lowercase() == header.to_lowercase())
         };
     
-        // Required Fields
+        // Rest of the implementation remains the same...
         let student_id_idx = get_index("student_id")
             .ok_or(TransformError::MissingRequiredField("student_id".to_string()))?;
         let first_name_idx = get_index("first_name")
@@ -122,7 +123,6 @@ impl CsvTransformer {
                 }
             });
         
-        // Create the CreateSchoolAccountRequest with all the parsed fields
         Ok(CreateSchoolAccountRequest {
             school_id: student_id,
             first_name,

@@ -4,7 +4,7 @@ use tauri::State;
 use uuid::Uuid;
 use crate::DbState;
 use crate::db::purpose::{Purpose, CreatePurposeRequest};
-use rusqlite::Result;
+use rusqlite::{Result, Error as RusqliteError};
 
 #[tauri::command]
 pub async fn create_purpose(
@@ -13,14 +13,18 @@ pub async fn create_purpose(
     username: String,
     password: String
 ) -> Result<Purpose, String> {
-    let conn = state.0.get_cloned_connection();
+    let db = state.0.clone();
+    let purpose_repo = db.purpose_repository.clone();
+    let auth = db.auth.clone();
     
-    if state.0.auth.authenticate(&conn, &username, &password)? {
-        state.0.purpose_repository.create_purpose(&conn, purpose)
-            .map_err(|e| e.to_string())
-    } else {
-        Err("Authentication failed".to_string())
-    }
+    db.with_connection(move |conn| {
+        if auth.authenticate(conn, &username, &password)? {
+            purpose_repo.create_purpose(conn, purpose)
+                .map_err(|_| RusqliteError::InvalidQuery)
+        } else {
+            Err(RusqliteError::QueryReturnedNoRows)
+        }
+    }).await.map_err(|e| format!("Authentication failed: {}", e.to_string()))
 }
 
 #[tauri::command]
@@ -28,9 +32,13 @@ pub async fn get_all_purposes(
     state: State<'_, DbState>,
     include_deleted: bool
 ) -> Result<Vec<Purpose>, String> {
-    let conn = state.0.get_cloned_connection();
-    state.0.purpose_repository.get_all_purposes(&conn, include_deleted)
-        .map_err(|e| e.to_string())
+    let db = state.0.clone();
+    let purpose_repo = db.purpose_repository.clone();
+    
+    db.with_connection(move |conn| {
+        purpose_repo.get_all_purposes(conn, include_deleted)
+            .map_err(|_| RusqliteError::InvalidQuery)
+    }).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -41,9 +49,13 @@ pub async fn get_purpose(
     let purpose_id = Uuid::parse_str(&id)
         .map_err(|e| format!("Invalid UUID format: {}", e))?;
     
-    let conn = state.0.get_cloned_connection();
-    state.0.purpose_repository.get_purpose(&conn, purpose_id)
-        .map_err(|e| e.to_string())
+    let db = state.0.clone();
+    let purpose_repo = db.purpose_repository.clone();
+    
+    db.with_connection(move |conn| {
+        purpose_repo.get_purpose(conn, purpose_id)
+            .map_err(|_| RusqliteError::InvalidQuery)
+    }).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -51,9 +63,13 @@ pub async fn get_purpose_by_label(
     state: State<'_, DbState>,
     label: String
 ) -> Result<Purpose, String> {
-    let conn = state.0.get_cloned_connection();
-    state.0.purpose_repository.get_purpose_by_label(&conn, &label)
-        .map_err(|e| e.to_string())
+    let db = state.0.clone();
+    let purpose_repo = db.purpose_repository.clone();
+    
+    db.with_connection(move |conn| {
+        purpose_repo.get_purpose_by_label(conn, &label)
+            .map_err(|_| RusqliteError::InvalidQuery)
+    }).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -67,14 +83,18 @@ pub async fn update_purpose(
     let purpose_id = Uuid::parse_str(&id)
         .map_err(|e| format!("Invalid UUID format: {}", e))?;
     
-    let conn = state.0.get_cloned_connection();
+    let db = state.0.clone();
+    let purpose_repo = db.purpose_repository.clone();
+    let auth = db.auth.clone();
     
-    if state.0.auth.authenticate(&conn, &username, &password)? {
-        state.0.purpose_repository.update_purpose(&conn, purpose_id, purpose)
-            .map_err(|e| e.to_string())
-    } else {
-        Err("Authentication failed".to_string())
-    }
+    db.with_connection(move |conn| {
+        if auth.authenticate(conn, &username, &password)? {
+            purpose_repo.update_purpose(conn, purpose_id, purpose)
+                .map_err(|_| RusqliteError::InvalidQuery)
+        } else {
+            Err(RusqliteError::QueryReturnedNoRows)
+        }
+    }).await.map_err(|e| format!("Authentication failed: {}", e.to_string()))
 }
 
 #[tauri::command]
@@ -87,14 +107,18 @@ pub async fn soft_delete_purpose(
     let purpose_id = Uuid::parse_str(&id)
         .map_err(|e| format!("Invalid UUID format: {}", e))?;
     
-    let conn = state.0.get_cloned_connection();
+    let db = state.0.clone();
+    let purpose_repo = db.purpose_repository.clone();
+    let auth = db.auth.clone();
     
-    if state.0.auth.authenticate(&conn, &username, &password)? {
-        state.0.purpose_repository.soft_delete_purpose(&conn, purpose_id)
-            .map_err(|e| e.to_string())
-    } else {
-        Err("Authentication failed".to_string())
-    }
+    db.with_connection(move |conn| {
+        if auth.authenticate(conn, &username, &password)? {
+            purpose_repo.soft_delete_purpose(conn, purpose_id)
+                .map_err(|_| RusqliteError::InvalidQuery)
+        } else {
+            Err(RusqliteError::QueryReturnedNoRows)
+        }
+    }).await.map_err(|e| format!("Authentication failed: {}", e.to_string()))
 }
 
 #[tauri::command]
@@ -107,12 +131,16 @@ pub async fn restore_purpose(
     let purpose_id = Uuid::parse_str(&id)
         .map_err(|e| format!("Invalid UUID format: {}", e))?;
     
-    let conn = state.0.get_cloned_connection();
+    let db = state.0.clone();
+    let purpose_repo = db.purpose_repository.clone();
+    let auth = db.auth.clone();
     
-    if state.0.auth.authenticate(&conn, &username, &password)? {
-        state.0.purpose_repository.restore_purpose(&conn, purpose_id)
-            .map_err(|e| e.to_string())
-    } else {
-        Err("Authentication failed".to_string())
-    }
+    db.with_connection(move |conn| {
+        if auth.authenticate(conn, &username, &password)? {
+            purpose_repo.restore_purpose(conn, purpose_id)
+                .map_err(|_| RusqliteError::InvalidQuery)
+        } else {
+            Err(RusqliteError::QueryReturnedNoRows)
+        }
+    }).await.map_err(|e| format!("Authentication failed: {}", e.to_string()))
 }
