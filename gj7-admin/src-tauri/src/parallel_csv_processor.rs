@@ -3,7 +3,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use crossbeam_channel::{Sender, Receiver};
+use crossbeam_channel::{Sender, Receiver, RecvTimeoutError};
 use csv::StringRecord;
 use rand::{Rng, thread_rng};
 use uuid::Uuid;
@@ -46,7 +46,7 @@ impl Default for ProcessingResult {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum WorkItem {
     Create(CreateSchoolAccountRequest),
     Update(Uuid, CreateSchoolAccountRequest),
@@ -414,7 +414,7 @@ impl ParallelCsvProcessor {
         }
     }
 
-    fn spawn_workers(
+    fn large_dataset_processor(
         &self,
         work_receiver: Receiver<WorkItem>,
         result_sender: Sender<(usize, usize, Vec<String>)>,
@@ -435,102 +435,160 @@ impl ParallelCsvProcessor {
                 let headers = headers.clone();
     
                 thread::spawn(move || {
-                    let mut successful = 0;
-                    let mut failed = 0;
-                    let mut errors = Vec::new();
+                    let mut total_successful = 0;
+                    let mut total_failed = 0;
+                    let mut total_errors = Vec::new();
     
-                    // Enhanced connection management with retry
-                    let mut connection = match get_connection_with_retry(&pool, &retry_config) {
-                        Ok(conn) => conn,
-                        Err(e) => {
-                            log::error!("Worker {} connection error: {}", worker_id, e);
-                            let _ = result_sender.send((0, 1, vec![e]));
-                            return;
+                    // Configurable batch and cooldown settings
+                    const BATCH_SIZE: usize = 1000;
+                    const COOLDOWN_DURATION: Duration = Duration::from_secs(5); // 5-second pause
+                    const MAX_TOTAL_BATCHES: usize = 10; // Prevent infinite processing
+    
+                    let mut batch_count = 0;
+    
+                    loop {
+                        // Check if we've reached max batch processing
+                        if batch_count >= MAX_TOTAL_BATCHES {
+                            log::warn!("Worker {} reached max batch limit", worker_id);
+                            break;
                         }
-                    };
     
-                    // Robust transaction management
-                    let mut tx = match connection.savepoint() {
-                        Ok(tx) => tx,
-                        Err(e) => {
-                            log::error!("Worker {} savepoint error: {}", worker_id, e);
-                            let _ = result_sender.send((0, 1, vec![e.to_string()]));
-                            return;
-                        }
-                    };
+                        // Establish a new connection for each batch
+                        let mut connection = match get_connection_with_retry(&pool, &retry_config) {
+                            Ok(conn) => conn,
+                            Err(e) => {
+                                log::error!("Worker {} connection error: {}", worker_id, e);
+                                let _ = result_sender.send((0, 1, vec![e]));
+                                return;
+                            }
+                        };
     
-                    // Process work items
-                    while let Ok(work_item) = work_receiver.recv() {
-                        match work_item {
-                            WorkItem::Create(create_request) => {
-                                // Create transformer with thread-safe db_state
-                                let transformer = CsvTransformer::new(&headers, Arc::clone(&db_state));
+                        // Start a new transaction for this batch
+                        let mut tx = match connection.savepoint() {
+                            Ok(tx) => tx,
+                            Err(e) => {
+                                log::error!("Worker {} savepoint error: {}", worker_id, e);
+                                let _ = result_sender.send((0, 1, vec![e.to_string()]));
+                                return;
+                            }
+                        };
     
-                                match retry_operation(
-                                    || {
-                                        // Nested savepoint for granular error handling
-                                        let mut nested_tx = tx.savepoint()?;
-                                        let repo = SqliteSchoolAccountRepository;
-                                        let result = repo.create_school_account(&nested_tx, create_request.clone());
-                                        nested_tx.commit()?;
-                                        result
-                                    }, 
-                                    &retry_config
-                                ) {
-                                    Ok(_) => successful += 1,
-                                    Err(e) => {
-                                        if !e.to_string().contains("UNIQUE constraint failed") {
-                                            failed += 1;
-                                            errors.push(format!(
-                                                "Worker {} create error for {}: {}", 
-                                                worker_id,
-                                                create_request.school_id, 
-                                                e
-                                            ));
+                        let mut batch_successful = 0;
+                        let mut batch_failed = 0;
+                        let mut batch_errors = Vec::new();
+    
+                        // Process up to batch_size items or until no more work
+                        for _ in 0..BATCH_SIZE {
+                            // Try to receive work item with a timeout
+                            let work_item = match work_receiver.recv_timeout(Duration::from_millis(500)) {
+                                Ok(item) => item,
+                                Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
+                                    // If timeout occurs and channel is empty, worker is done
+                                    if work_receiver.is_empty() {
+                                        break;
+                                    }
+                                    continue;
+                                }
+                                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                                    // Channel closed, no more work
+                                    break;
+                                }
+                            };
+    
+                            match work_item {
+                                WorkItem::Create(create_request) => {
+                                    match retry_operation(
+                                        || {
+                                            let mut nested_tx = tx.savepoint()?;
+                                            let repo = SqliteSchoolAccountRepository;
+                                            let result = repo.create_school_account(&nested_tx, create_request.clone());
+                                            nested_tx.commit()?;
+                                            result
+                                        }, 
+                                        &retry_config
+                                    ) {
+                                        Ok(_) => batch_successful += 1,
+                                        Err(e) => {
+                                            if !e.to_string().contains("UNIQUE constraint failed") {
+                                                batch_failed += 1;
+                                                batch_errors.push(format!(
+                                                    "Worker {} create error for {}: {}", 
+                                                    worker_id,
+                                                    create_request.school_id, 
+                                                    e
+                                                ));
+                                            }
+                                        }
+                                    }
+                                }
+                                WorkItem::Update(id, update_request) => {
+                                    let update_request_converted: UpdateSchoolAccountRequest = update_request.clone().into();
+                                    
+                                    match retry_operation(
+                                        || {
+                                            let mut nested_tx = tx.savepoint()?;
+                                            let repo = SqliteSchoolAccountRepository;
+                                            let result = repo.update_school_account(&nested_tx, id, update_request_converted.clone());
+                                            nested_tx.commit()?;
+                                            result
+                                        }, 
+                                        &retry_config
+                                    ) {
+                                        Ok(_) => batch_successful += 1,
+                                        Err(e) => {
+                                            if !e.to_string().contains("UNIQUE constraint failed") {
+                                                batch_failed += 1;
+                                                batch_errors.push(format!(
+                                                    "Worker {} update error for {}: {}", 
+                                                    worker_id,
+                                                    id, 
+                                                    e
+                                                ));
+                                            }
                                         }
                                     }
                                 }
                             }
-                            WorkItem::Update(id, update_request) => {
-                                let update_request_converted: UpdateSchoolAccountRequest = update_request.clone().into();
-                                
-                                match retry_operation(
-                                    || {
-                                        // Nested savepoint for granular error handling
-                                        let mut nested_tx = tx.savepoint()?;
-                                        let repo = SqliteSchoolAccountRepository;
-                                        let result = repo.update_school_account(&nested_tx, id, update_request_converted.clone());
-                                        nested_tx.commit()?;
-                                        result
-                                    }, 
-                                    &retry_config
-                                ) {
-                                    Ok(_) => successful += 1,
-                                    Err(e) => {
-                                        if !e.to_string().contains("UNIQUE constraint failed") {
-                                            failed += 1;
-                                            errors.push(format!(
-                                                "Worker {} update error for {}: {}", 
-                                                worker_id,
-                                                id, 
-                                                e
-                                            ));
-                                        }
-                                    }
-                                }
-                            }
                         }
-                    }
     
-                    // Commit main transaction
-                    if let Err(commit_err) = tx.commit() {
-                        errors.push(format!("Worker {} transaction commit failed: {}", worker_id, commit_err));
-                        failed += successful;
-                        successful = 0;
+                        // Commit the batch transaction
+                        if let Err(commit_err) = tx.commit() {
+                            batch_errors.push(format!("Worker {} batch commit failed: {}", worker_id, commit_err));
+                            batch_failed += batch_successful;
+                            batch_successful = 0;
+                        }
+    
+                        // Aggregate batch results
+                        total_successful += batch_successful;
+                        total_failed += batch_failed;
+                        total_errors.extend(batch_errors.clone());
+    
+                        // Send intermediate results
+                        let _ = result_sender.send((batch_successful, batch_failed, batch_errors.clone()));
+    
+                        // Increment batch count
+                        batch_count += 1;
+    
+                        // Cooldown period after processing a batch
+                        log::info!(
+                            "Worker {} completed batch {}/{}. Cooling down for {} seconds", 
+                            worker_id, 
+                            batch_count, 
+                            MAX_TOTAL_BATCHES, 
+                            COOLDOWN_DURATION.as_secs()
+                        );
+                        
+                        // Intentional pause to release resources
+                        std::thread::sleep(COOLDOWN_DURATION);
+    
+                        // Break conditions
+                        if work_receiver.is_empty() && work_receiver.len() == 0 {
+                            break;
+                        }
                     }
     
                     // Send final results
-                    let _ = result_sender.send((successful, failed, errors));
+                    let _ = result_sender.send((total_successful, total_failed, total_errors));
                 })
             })
             .collect()
@@ -551,116 +609,222 @@ where
 {
     let total_records = records.len();
     
+    // Debug logging for dataset details
+    log::debug!(
+        "CSV Processing Initiated: 
+        - Total Records: {}
+        - Headers: {:?}
+        - Existing Accounts: {}
+        - Last Updated Semester ID: {:?}",
+        total_records, 
+        headers, 
+        existing_accounts.len(),
+        last_updated_semester_id
+    );
+    
     // Define threshold for switching between processing strategies
     const SMALL_DATASET_THRESHOLD: usize = 5000;
+    const CHANNEL_BUFFER_SIZE: usize = 10_000; // Increased buffer size
     
     // Clone the progress callback for async usage
     let progress_callback_clone = progress_callback.clone();
     
-    // Choose processing strategy based on dataset size
-    let result = if total_records <= SMALL_DATASET_THRESHOLD {
-        // Use process_batch for small datasets
-        let mut overall_result = ProcessingResult::default();
-        let chunk_size = 500; // Use a reasonable chunk size for batch processing
-        
-        for (iteration, chunk) in records.chunks(chunk_size).enumerate() {
-            let chunk_result = processor.process_batch(
-                chunk.to_vec(),
-                &headers,
-                &existing_accounts,
-                last_updated_semester_id
-            );
+    // Large dataset processing with enhanced robustness
+    log::info!(
+        "Validation success, processing starts now... 
+        Preparing to process large dataset with {} records", 
+        total_records
+    );
 
-            // Update overall result
-            overall_result.successful += chunk_result.successful;
-            overall_result.failed += chunk_result.failed;
-            overall_result.errors.extend(chunk_result.errors);
+    // Enhanced channel creation with larger buffer and bounded capacity
+    let (work_sender, work_receiver) = crossbeam_channel::bounded(CHANNEL_BUFFER_SIZE);
+    let (result_sender, result_receiver) = crossbeam_channel::bounded(processor.num_workers);
 
-            // Progress callback
-            let progress = ((iteration + 1) * chunk_size).min(total_records) as f32 / total_records as f32;
-            progress_callback(progress);
-        }
-        
-        // Final progress
-        progress_callback(1.0);
-        
-        Ok(overall_result)
-    } else {
-        // Use spawn_workers for large datasets
-        let (work_sender, work_receiver) = crossbeam_channel::bounded(total_records);
-        let (result_sender, result_receiver) = crossbeam_channel::bounded(processor.num_workers);
+    // Clone work_sender for use in the sending thread
+    let work_sender_clone = work_sender.clone();
 
-        // Distribute work items
-        let mut work_items = Vec::new();
-        for record in records.into_iter() {
-            // Transform record and create appropriate WorkItem
-            if let Ok(transformed_request) = CsvTransformer::new(&headers, Arc::clone(&processor.db_state)).transform_record(&record) {
+    // Prepare work items with error handling and logging
+    let mut work_items = Vec::with_capacity(total_records);
+    let mut create_count = 0;
+    let mut update_count = 0;
+    let mut skipped_count = 0;
+
+    for (record_index, record) in records.into_iter().enumerate() {
+        match CsvTransformer::new(&headers, Arc::clone(&processor.db_state)).transform_record(&record) {
+            Ok(transformed_request) => {
                 // Determine if it's a create or update based on existing accounts
                 let work_item = if !existing_accounts.iter().any(|existing| 
                     existing.existing_accounts.iter().any(|acc| acc.school_id == transformed_request.school_id)
                 ) {
+                    create_count += 1;
                     WorkItem::Create(transformed_request)
                 } else {
                     // Find the existing account ID for update
-                    if let Some(existing_account) = existing_accounts.iter()
+                    match existing_accounts.iter()
                         .find(|existing| existing.existing_accounts.iter()
                             .any(|acc| acc.school_id == transformed_request.school_id))
                         .and_then(|existing| existing.existing_accounts.first()) {
-                        WorkItem::Update(existing_account.id, transformed_request)
-                    } else {
-                        continue; // Skip if no matching account found
+                        Some(existing_account) => {
+                            update_count += 1;
+                            WorkItem::Update(existing_account.id, transformed_request)
+                        },
+                        None => {
+                            skipped_count += 1;
+                            continue; // Skip if no matching account found
+                        }
                     }
                 };
                 
                 work_items.push(work_item);
+            },
+            Err(e) => {
+                log::warn!(
+                    "Record transformation error at index {}: {}. Skipping record.",
+                    record_index,
+                    e
+                );
+                skipped_count += 1;
+            }
+        }
+    }
+
+    // Detailed debug logging for work items
+    log::debug!(
+        "Work Item Preparation Complete:
+        - Total Work Items: {}
+        - Create Items: {}
+        - Update Items: {}
+        - Skipped Items: {}",
+        work_items.len(),
+        create_count,
+        update_count,
+        skipped_count
+    );
+
+    // Enhanced work item sending with backpressure and retry mechanism
+    let progress_callback_async = progress_callback_clone.clone();
+    let total_records_async = total_records;
+
+    // Spawn a dedicated thread for work item sending
+    let send_handle = thread::spawn(move || {
+        log::debug!("Starting to send work items to processing channel");
+        
+        let mut sent_count = 0;
+        let mut last_log_time = std::time::Instant::now();
+
+        for (index, work_item) in work_items.into_iter().enumerate() {
+            // Implement backpressure mechanism
+            loop {
+                match work_sender_clone.try_send(work_item.clone()) {
+                    Ok(_) => {
+                        sent_count += 1;
+                        break;
+                    },
+                    Err(crossbeam_channel::TrySendError::Full(_)) => {
+                        // Wait and retry if channel is full
+                        std::thread::sleep(Duration::from_millis(10));
+                        continue;
+                    },
+                    Err(crossbeam_channel::TrySendError::Disconnected(_)) => {
+                        log::error!("Channel disconnected during work item sending");
+                        return sent_count;
+                    }
+                }
+            }
+            
+            // Periodic progress and logging
+            if index % 100 == 0 {
+                let progress = index as f32 / total_records_async as f32;
+                progress_callback_async(progress);
+
+                // Log progress periodically to prevent log spam
+                if last_log_time.elapsed() >= Duration::from_secs(5) {
+                    log::info!(
+                        "Work Item Sending Progress: {}/{} ({}%)", 
+                        index, 
+                        total_records_async,
+                        (progress * 100.0).round()
+                    );
+                    last_log_time = std::time::Instant::now();
+                }
             }
         }
 
-        // Capture cloned progress callback for async use
-        let progress_callback_async = progress_callback_clone.clone();
+        log::debug!("Finished sending all work items");
+        sent_count
+    });
 
-        // Send work items with progress tracking
-        let total_records_async = total_records;
-        tokio::spawn(async move {
-            for (index, work_item) in work_items.into_iter().enumerate() {
-                work_sender.send(work_item).expect("Failed to send work item");
-                
-                // Periodic progress update
-                if index % 100 == 0 {
-                    let progress = index as f32 / total_records_async as f32;
-                    progress_callback_async(progress);
-                }
-            }
-            drop(work_sender);
-        });
+    // Drop the original sender to signal completion
+    drop(work_sender);
 
-        // Spawn workers
-        let workers = processor.spawn_workers(
-            work_receiver, 
-            result_sender, 
-            &headers
-        );
+    // Log before spawning workers
+    log::info!(
+        "Spawning {} workers for large dataset processing", 
+        processor.num_workers
+    );
 
-        // Collect and aggregate results
-        let mut overall_result = ProcessingResult::default();
-        for _ in 0..processor.num_workers {
-            if let Ok((successful, failed, errors)) = result_receiver.recv() {
+    // Spawn workers
+    let workers = processor.large_dataset_processor(
+        work_receiver, 
+        result_sender, 
+        &headers
+    );
+
+    // Collect and aggregate results with timeout and error handling
+    let mut overall_result = ProcessingResult::default();
+    log::debug!("Collecting results from workers");
+
+    // Timeout mechanism for result collection
+    let result_collection_timeout = Duration::from_secs(600); // 10-minute timeout
+    let collection_start = std::time::Instant::now();
+
+    for _ in 0..processor.num_workers {
+        // Break if timeout occurs
+        if collection_start.elapsed() > result_collection_timeout {
+            log::error!("Result collection timed out");
+            break;
+        }
+
+        match result_receiver.recv_timeout(Duration::from_secs(30)) {
+            Ok((successful, failed, errors)) => {
+                log::debug!(
+                    "Worker result - Successful: {}, Failed: {}, Errors: {}",
+                    successful, 
+                    failed, 
+                    errors.len()
+                );
                 overall_result.successful += successful;
                 overall_result.failed += failed;
                 overall_result.errors.extend(errors);
+            },
+            Err(err) => {
+                log::error!("Error receiving worker results: {:?}", err);
+                break;
             }
         }
+    }
 
-        // Wait for all workers to complete
-        for worker in workers {
-            worker.join().expect("Worker thread panicked");
-        }
+    // Wait for work item sending thread to complete
+    let sent_count = send_handle.join().expect("Work item sending thread failed");
 
-        // Final progress callback
-        progress_callback_clone(1.0);
+    // Wait for all workers to complete
+    log::debug!("Waiting for worker threads to complete");
+    for worker in workers {
+        worker.join().expect("Worker thread panicked");
+    }
 
-        Ok(overall_result)
-    };
+    // Final progress and logging
+    log::debug!( 
+        "Large dataset processing complete. 
+        Total Sent: {}
+        Total Successful: {}, 
+        Total Failed: {}, Total Errors: {}",
+        sent_count,
+        overall_result.successful,
+        overall_result.failed,
+        overall_result.errors.len()
+    );
+    progress_callback_clone(1.0);
 
-    result
+    Ok(overall_result)
 }
