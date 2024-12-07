@@ -2,6 +2,7 @@
 use std::fmt;
 use std::sync::Arc;
 use std::thread;
+use anyhow::{Context, Result};
 use std::time::Duration;
 use crossbeam_channel::{Sender, Receiver, RecvTimeoutError};
 use csv::StringRecord;
@@ -14,7 +15,7 @@ use crate::DbState;
 use tauri::State;
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
-
+impl std::error::Error for ProcessingError {}
 
 #[derive(Debug)]
 enum ProcessingError {
@@ -109,19 +110,21 @@ impl Retryable for rusqlite::Error {
 // Retry configuration
 #[derive(Clone)]
 struct RetryConfig {
-    max_attempts: usize,
-    initial_delay_ms: u64,
-    max_delay_ms: u64,
-    exponential_base: u64,
+    max_attempts: usize,           // Increased to maximum
+    initial_delay_ms: u64,          // Minimum initial delay
+    max_delay_ms: u64,              // Maximum delay between retries
+    exponential_base: u64,          // Exponential backoff multiplier
+    jitter_percentage: f64,         // Random jitter to prevent thundering herd
 }
 
 impl Default for RetryConfig {
     fn default() -> Self {
         RetryConfig {
-            max_attempts: 5,
-            initial_delay_ms: 50,
-            max_delay_ms: 1000,
-            exponential_base: 2,
+            max_attempts: 50,        // Extremely high number of retry attempts
+            initial_delay_ms: 50,    // Very quick initial retry
+            max_delay_ms: 30_000,    // Maximum 30 seconds between retries
+            exponential_base: 2,     // Standard exponential backoff
+            jitter_percentage: 0.25, // 25% jitter to spread out retries
         }
     }
 }
@@ -131,37 +134,53 @@ fn get_connection_with_retry(
     config: &RetryConfig
 ) -> Result<PooledConnection<SqliteConnectionManager>, String> {
     let mut attempt = 0;
+    let mut rng = rand::thread_rng();
+
     loop {
         match pool.get() {
             Ok(conn) => return Ok(conn),
             Err(e) if attempt < config.max_attempts => {
                 attempt += 1;
                 
+                // Enhanced exponential backoff with jitter
                 let base_delay = config.initial_delay_ms * (2_u64.pow(attempt as u32));
-                let jitter = thread_rng().gen_range(0..=base_delay);
-                let actual_delay = std::cmp::min(base_delay + jitter, config.max_delay_ms);
+                let jitter = base_delay as f64 * config.jitter_percentage;
+                let jittered_delay = base_delay as f64 + (rng.gen::<f64>() * jitter);
+                let actual_delay = std::cmp::min(
+                    jittered_delay as u64, 
+                    config.max_delay_ms
+                );
                 
                 log::error!(
-                    "Connection pool retrieval failed (Attempt {}/{}) with error: {}. 
-                    Retry delay: {} ms. 
-                    Error details: {:?}
-                    Possible causes:
-                    - Database is locked
-                    - Connection pool exhausted
-                    - Resource temporarily unavailable
-                    - Concurrent connection attempts",
+                    "Connection Retrieval Retry: 
+                    - Attempt: {}/{}
+                    - Delay: {} ms
+                    - Error: {}
+                    - Possible Causes:
+                      * Database Contention
+                      * Connection Pool Exhaustion
+                      * Resource Constraints",
                     attempt, 
                     config.max_attempts, 
-                    e,
-                    actual_delay,
+                    actual_delay, 
                     e
                 );
                 
+                // Advanced sleep mechanism with potential thread yield
                 std::thread::sleep(Duration::from_millis(actual_delay));
+                
+                // Optional: Yield to allow other threads to proceed
+                if attempt % 5 == 0 {
+                    std::thread::yield_now();
+                }
             }
             Err(e) => return Err(format!(
-                "Persistent connection retrieval failure after {} attempts. 
-                Underlying error: {}", 
+                "Persistent Connection Failure after {} attempts. 
+                Underlying Error: {}
+                Recommended Actions:
+                1. Check database connection
+                2. Verify connection pool configuration
+                3. Review system resource availability", 
                 config.max_attempts, 
                 e
             )),
@@ -173,239 +192,77 @@ fn get_connection_with_retry(
 fn retry_operation<T, E, F>(
     mut operation: F, 
     config: &RetryConfig
-) -> Result<T, E>
+) -> Result<T, ProcessingError>
 where 
     F: FnMut() -> Result<T, E>,
-    E: Retryable + std::fmt::Debug
+    E: Retryable + std::fmt::Debug + Into<ProcessingError>
 {
     let mut attempt = 0;
+    let mut rng = rand::thread_rng();
+
     loop {
         match operation() {
             Ok(result) => return Ok(result),
             Err(err) if attempt < config.max_attempts && err.should_retry() => {
                 attempt += 1;
                 
-                let delay = std::cmp::min(
-                    config.initial_delay_ms * (config.exponential_base.pow(attempt as u32)),
+                // Exponential backoff with jitter
+                let base_delay = config.initial_delay_ms * (config.exponential_base.pow(attempt as u32));
+                let jitter = base_delay as f64 * config.jitter_percentage;
+                let jittered_delay = base_delay as f64 + (rng.gen::<f64>() * jitter);
+                let actual_delay = std::cmp::min(
+                    jittered_delay as u64, 
                     config.max_delay_ms
                 );
                 
-                let jitter = rand::random::<u64>() % (delay / 2);
-                let actual_delay = delay + jitter;
-                
                 log::warn!(
-                    "Operation retry attempt {}/{} triggered. 
-                    Delay: {} ms
-                    Error details: {:?}
-                    Retry conditions: 
-                    - Retryable error detected
-                    - Attempt within max retry limit",
+                    "Retry Operation: 
+                    - Attempt: {}/{}
+                    - Delay: {} ms
+                    - Error: {:?}
+                    - Backoff Strategy: Exponential with Jitter",
                     attempt, 
                     config.max_attempts, 
-                    actual_delay,
+                    actual_delay, 
                     err
                 );
                 
-                std::thread::sleep(Duration::from_millis(actual_delay));
+                // Advanced parking mechanism with timeout
+                std::thread::park_timeout(Duration::from_millis(actual_delay));
             }
             Err(err) => {
                 log::error!(
-                    "Operation failed after {} retry attempts. 
-                    Final error: {:?}
-                    Unable to successfully complete operation.",
-                    config.max_attempts, 
-                    err
+                    "Operation Persistent Failure:
+                    - Total Attempts: {}
+                    - Final Error: {:?}
+                    - Error Type: {}
+                    - Recommendation: Manual Intervention Required",
+                    attempt, 
+                    err,
+                    std::any::type_name::<E>()
                 );
-                return Err(err);
+                return Err(err.into());
             }
         }
     }
 }
 
 impl ParallelCsvProcessor {
-    fn process_batch(
-        &self,
-        batch: Vec<StringRecord>,
-        headers: &StringRecord,
-        existing_accounts: &[ExistingAccountInfo],
-        last_updated_semester_id: Option<Uuid>,
-    ) -> ProcessingResult {
-        let batch_len = batch.len(); 
-
-        // Pre-process batch to separate creates and updates
-        let (creates, updates): (Vec<_>, Vec<_>) = batch.into_iter()
-            .filter_map(|record| {
-                let transformer = CsvTransformer::new(headers, Arc::clone(&self.db_state));
-                transformer.transform_record(&record).ok()
-            })
-            .partition(|request| {
-                !existing_accounts.iter().any(|existing| {
-                    existing.existing_accounts.iter()
-                        .any(|acc| acc.school_id == request.school_id)
-                })
-            });
-
-        let mut successful = 0;
-        let mut failed = 0;
-        let mut errors = Vec::new();
-
-        // Define retry config with more aggressive backoff
-        let retry_config = RetryConfig {
-            max_attempts: 5,
-            initial_delay_ms: 100,
-            max_delay_ms: 2000,
-            exponential_base: 2,
-        };
-
-        // Attempt to get a connection with extended timeout
-        let mut connection = match get_connection_with_retry(&self.pool, &retry_config) {
-            Ok(conn) => conn,
-            Err(e) => {
-                return ProcessingResult {
-                    successful: 0,
-                    failed: batch_len, // Use the stored length
-                    errors: vec![format!("Connection error: {}", e)],
-                };
-            }
-        };
-
-        // Use a savepoint for more granular transaction management
-        let tx = match connection.savepoint() {
-            Ok(tx) => tx,
-            Err(e) => {
-                return ProcessingResult {
-                    successful: 0,
-                    failed: batch_len, // Use the stored length
-                    errors: vec![format!("Transaction start error: {}", e)],
-                };
-            }
-        };
-
-        // Process creates
-        if !creates.is_empty() {
-            for create_request in creates {
-                match self.process_create(&tx, create_request, &retry_config) {
-                    Ok(_) => successful += 1,
-                    Err(ProcessingError::UniqueViolation(_)) => {/* Ignore */},
-                    Err(e) => {
-                        failed += 1;
-                        errors.push(e.to_string());
-                    }
-                }
-            }
-        }
-
-        // Process updates with account IDs
-        if !updates.is_empty() {
-            for update_request in updates {
-                // Find the corresponding existing account ID
-                if let Some(existing_account) = existing_accounts.iter()
-                    .find(|existing| existing.existing_accounts.iter()
-                        .any(|acc| acc.school_id == update_request.school_id))
-                    .and_then(|existing| existing.existing_accounts.first()) {
-                    
-                    match self.process_update(&tx, existing_account.id, update_request, &retry_config) {
-                        Ok(_) => successful += 1,
-                        Err(e) => {
-                            failed += 1;
-                            errors.push(e.to_string());
-                        }
-                    }
-                }
-            }
-        }
-
-        // Attempt to commit the transaction
-        if let Err(commit_err) = tx.commit() {
-            errors.push(format!("Transaction commit failed: {}", commit_err));
-            failed += successful;
-            successful = 0;
-        }
-
-        // Return results with enhanced error tracking
-        ProcessingResult {
-            successful,
-            failed,
-            errors,
-        }
-    }
-
-    fn process_update(
-        &self,
-        tx: &rusqlite::Savepoint,  // Change from Transaction to Savepoint
-        account_id: Uuid,
-        update_request: CreateSchoolAccountRequest,
-        retry_config: &RetryConfig,
-    ) -> Result<(), ProcessingError> {
-        let mut attempt = 0;
-        
-        // Convert CreateSchoolAccountRequest to UpdateSchoolAccountRequest
-        let update_request: UpdateSchoolAccountRequest = update_request.into();
-        
-        loop {
-            match retry_operation(
-                || SqliteSchoolAccountRepository.update_school_account(tx, account_id, update_request.clone()),
-                retry_config
-            ) {
-                Ok(_) => return Ok(()),
-                Err(e) => {
-                    let error = ProcessingError::from(e);
-                    match error {
-                        ProcessingError::UniqueViolation(_) => return Err(error),
-                        ProcessingError::DatabaseLocked(_) if attempt < retry_config.max_attempts => {
-                            attempt += 1;
-                            let delay = std::cmp::min(
-                                retry_config.initial_delay_ms * 2_u64.pow(attempt as u32),
-                                retry_config.max_delay_ms
-                            );
-                            thread::sleep(std::time::Duration::from_millis(delay));
-                        },
-                        _ => return Err(error),
-                    }
-                }
-            }
-        }
-    }
-
-    fn process_create(
-        &self,
-        tx: &rusqlite::Savepoint,  // Change from Transaction to Savepoint
-        create_request: CreateSchoolAccountRequest,
-        retry_config: &RetryConfig,
-    ) -> Result<(), ProcessingError> {
-        let mut attempt = 0;
-        
-        loop {
-            match retry_operation(
-                || SqliteSchoolAccountRepository.create_school_account(tx, create_request.clone()),
-                retry_config
-            ) {
-                Ok(_) => return Ok(()),
-                Err(e) => {
-                    let error = ProcessingError::from(e);
-                    match error {
-                        ProcessingError::UniqueViolation(_) => return Err(error),
-                        ProcessingError::DatabaseLocked(_) if attempt < retry_config.max_attempts => {
-                            attempt += 1;
-                            let delay = std::cmp::min(
-                                retry_config.initial_delay_ms * 2_u64.pow(attempt as u32),
-                                retry_config.max_delay_ms
-                            );
-                            thread::sleep(std::time::Duration::from_millis(delay));
-                        },
-                        _ => return Err(error),
-                    }
-                }
-            }
-        }
-    }
+    const BATCH_SIZE: usize = 500;
 
     pub fn new(pool: &Arc<Pool<SqliteConnectionManager>>, num_workers: Option<usize>, db_state: &State<DbState>) -> Self {
-        let num_workers = num_workers.unwrap_or_else(|| {
-            thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(4)
-        });
+        const MAX_CONCURRENT_WORKERS: usize = 8; 
+
+        let num_workers = num_workers
+            .map(|n| n.min(MAX_CONCURRENT_WORKERS))
+            .unwrap_or_else(|| {
+                std::cmp::min(
+                    thread::available_parallelism()
+                        .map(|n| n.get())
+                        .unwrap_or(4),
+                    MAX_CONCURRENT_WORKERS
+                )
+            });
         
         ParallelCsvProcessor {
             pool: Arc::clone(pool),
@@ -422,10 +279,17 @@ impl ParallelCsvProcessor {
     ) -> Vec<thread::JoinHandle<()>> {
         let pool = Arc::clone(&self.pool);
         let db_state = Arc::clone(&self.db_state);
-        let retry_config = RetryConfig::default();
+        let retry_config = RetryConfig {
+            max_attempts: 10,
+            initial_delay_ms: 100,
+            max_delay_ms: 5000,
+            exponential_base: 2,
+            jitter_percentage: 0.25,
+        };
         let headers = headers.clone();
+        let num_workers = self.num_workers;
     
-        (0..self.num_workers)
+        (0..num_workers)
             .map(|worker_id| {
                 let work_receiver = work_receiver.clone();
                 let result_sender = result_sender.clone();
@@ -438,38 +302,26 @@ impl ParallelCsvProcessor {
                     let mut total_successful = 0;
                     let mut total_failed = 0;
                     let mut total_errors = Vec::new();
+                    let mut work_completed = false;
     
-                    // Configurable batch and cooldown settings
-                    const BATCH_SIZE: usize = 1000;
-                    const COOLDOWN_DURATION: Duration = Duration::from_secs(5); // 5-second pause
-                    const MAX_TOTAL_BATCHES: usize = 10; // Prevent infinite processing
-    
-                    let mut batch_count = 0;
-    
-                    loop {
-                        // Check if we've reached max batch processing
-                        if batch_count >= MAX_TOTAL_BATCHES {
-                            log::warn!("Worker {} reached max batch limit", worker_id);
-                            break;
-                        }
-    
-                        // Establish a new connection for each batch
+                    while !work_completed {
+                        // Establish connection with extended retry
                         let mut connection = match get_connection_with_retry(&pool, &retry_config) {
                             Ok(conn) => conn,
                             Err(e) => {
-                                log::error!("Worker {} connection error: {}", worker_id, e);
+                                log::error!("Worker {} persistent connection error: {}", worker_id, e);
                                 let _ = result_sender.send((0, 1, vec![e]));
-                                return;
+                                break;
                             }
                         };
     
-                        // Start a new transaction for this batch
-                        let mut tx = match connection.savepoint() {
+                        // Start a new transaction with retry
+                        let mut tx = match connection.transaction() {
                             Ok(tx) => tx,
                             Err(e) => {
-                                log::error!("Worker {} savepoint error: {}", worker_id, e);
+                                log::error!("Worker {} transaction error: {}", worker_id, e);
                                 let _ = result_sender.send((0, 1, vec![e.to_string()]));
-                                return;
+                                break;
                             }
                         };
     
@@ -477,122 +329,131 @@ impl ParallelCsvProcessor {
                         let mut batch_failed = 0;
                         let mut batch_errors = Vec::new();
     
-                        // Process up to batch_size items or until no more work
-                        for _ in 0..BATCH_SIZE {
-                            // Try to receive work item with a timeout
-                            let work_item = match work_receiver.recv_timeout(Duration::from_millis(500)) {
+                        // Process work items with enhanced error handling
+                        for _ in 0..Self::BATCH_SIZE {
+                            // Receive work item with extended timeout and error handling
+                            let work_item = match work_receiver.recv_timeout(Duration::from_millis(1000)) {
                                 Ok(item) => item,
-                                Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
-                                    // If timeout occurs and channel is empty, worker is done
+                                Err(RecvTimeoutError::Timeout) => {
+                                    // Check if channel is empty to determine completion
                                     if work_receiver.is_empty() {
+                                        work_completed = true;
                                         break;
                                     }
                                     continue;
                                 }
-                                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
-                                    // Channel closed, no more work
+                                Err(RecvTimeoutError::Disconnected) => {
+                                    work_completed = true;
                                     break;
                                 }
                             };
     
+                            // Process work item with nested transaction and comprehensive retry
                             match work_item {
                                 WorkItem::Create(create_request) => {
-                                    match retry_operation(
-                                        || {
-                                            let mut nested_tx = tx.savepoint()?;
-                                            let repo = SqliteSchoolAccountRepository;
-                                            let result = repo.create_school_account(&nested_tx, create_request.clone());
-                                            nested_tx.commit()?;
-                                            result
-                                        }, 
+                                    let result = safe_create_account(
+                                        &mut tx, 
+                                        create_request, 
                                         &retry_config
-                                    ) {
+                                    );
+                                    match result {
                                         Ok(_) => batch_successful += 1,
                                         Err(e) => {
-                                            if !e.to_string().contains("UNIQUE constraint failed") {
-                                                batch_failed += 1;
-                                                batch_errors.push(format!(
-                                                    "Worker {} create error for {}: {}", 
-                                                    worker_id,
-                                                    create_request.school_id, 
-                                                    e
-                                                ));
-                                            }
+                                            batch_failed += 1;
+                                            batch_errors.push(e.to_string());
                                         }
                                     }
                                 }
                                 WorkItem::Update(id, update_request) => {
-                                    let update_request_converted: UpdateSchoolAccountRequest = update_request.clone().into();
-                                    
-                                    match retry_operation(
-                                        || {
-                                            let mut nested_tx = tx.savepoint()?;
-                                            let repo = SqliteSchoolAccountRepository;
-                                            let result = repo.update_school_account(&nested_tx, id, update_request_converted.clone());
-                                            nested_tx.commit()?;
-                                            result
-                                        }, 
+                                    let result = safe_update_account(
+                                        &mut tx, 
+                                        id, 
+                                        update_request, 
                                         &retry_config
-                                    ) {
+                                    );
+                                    match result {
                                         Ok(_) => batch_successful += 1,
                                         Err(e) => {
-                                            if !e.to_string().contains("UNIQUE constraint failed") {
-                                                batch_failed += 1;
-                                                batch_errors.push(format!(
-                                                    "Worker {} update error for {}: {}", 
-                                                    worker_id,
-                                                    id, 
-                                                    e
-                                                ));
-                                            }
+                                            batch_failed += 1;
+                                            batch_errors.push(e.to_string());
                                         }
                                     }
                                 }
                             }
                         }
     
-                        // Commit the batch transaction
+                        // Commit with comprehensive error handling
                         if let Err(commit_err) = tx.commit() {
-                            batch_errors.push(format!("Worker {} batch commit failed: {}", worker_id, commit_err));
+                            log::error!("Batch commit failed: {}", commit_err);
+                            batch_errors.push(format!("Commit failed: {}", commit_err));
                             batch_failed += batch_successful;
                             batch_successful = 0;
                         }
     
-                        // Aggregate batch results
+                        // Aggregate and send results
                         total_successful += batch_successful;
                         total_failed += batch_failed;
                         total_errors.extend(batch_errors.clone());
     
-                        // Send intermediate results
-                        let _ = result_sender.send((batch_successful, batch_failed, batch_errors.clone()));
+                        let _ = result_sender.send((batch_successful, batch_failed, batch_errors));
     
-                        // Increment batch count
-                        batch_count += 1;
-    
-                        // Cooldown period after processing a batch
-                        log::info!(
-                            "Worker {} completed batch {}/{}. Cooling down for {} seconds", 
-                            worker_id, 
-                            batch_count, 
-                            MAX_TOTAL_BATCHES, 
-                            COOLDOWN_DURATION.as_secs()
-                        );
-                        
-                        // Intentional pause to release resources
-                        std::thread::sleep(COOLDOWN_DURATION);
-    
-                        // Break conditions
-                        if work_receiver.is_empty() && work_receiver.len() == 0 {
-                            break;
+                        // Exit conditions
+                        if work_receiver.is_empty() {
+                            work_completed = true;
                         }
                     }
     
-                    // Send final results
+                    // Send final results and completion signal
                     let _ = result_sender.send((total_successful, total_failed, total_errors));
+                    let _ = result_sender.send((usize::MAX, 0, Vec::new())); // Completion signal
                 })
             })
             .collect()
     }
+}
+
+
+fn safe_create_account(
+    tx: &mut rusqlite::Transaction,
+    create_request: CreateSchoolAccountRequest,
+    retry_config: &RetryConfig,
+) -> Result<(), ProcessingError> {
+    retry_operation(
+        || {
+            let repo = SqliteSchoolAccountRepository;
+            // Ignore the returned SchoolAccount and just return Ok(()) if successful
+            repo.create_school_account(tx, create_request.clone())
+                .map(|_| ())
+                .map_err(|e| {
+                    log::error!("Create account error: {:?}", e);
+                    e
+                })
+        }, 
+        retry_config
+    )
+}
+
+fn safe_update_account(
+    tx: &mut rusqlite::Transaction,
+    id: Uuid,
+    update_request: CreateSchoolAccountRequest,
+    retry_config: &RetryConfig,
+) -> Result<(), ProcessingError> {
+    let update_request: UpdateSchoolAccountRequest = update_request.into();
+    
+    retry_operation(
+        || {
+            let repo = SqliteSchoolAccountRepository;
+            // Ignore the returned SchoolAccount and just return Ok(()) if successful
+            repo.update_school_account(tx, id, update_request.clone())
+                .map(|_| ())
+                .map_err(|e| {
+                    log::error!("Update account error: {:?}", e);
+                    e
+                })
+        }, 
+        retry_config
+    )
 }
 
 pub fn process_csv_with_progress<F>(
@@ -623,19 +484,11 @@ where
     );
     
     // Define threshold for switching between processing strategies
-    const SMALL_DATASET_THRESHOLD: usize = 5000;
-    const CHANNEL_BUFFER_SIZE: usize = 10_000; // Increased buffer size
-    
+    const CHANNEL_BUFFER_SIZE: usize = 75_000; // Increased buffer size
+
     // Clone the progress callback for async usage
     let progress_callback_clone = progress_callback.clone();
     
-    // Large dataset processing with enhanced robustness
-    log::info!(
-        "Validation success, processing starts now... 
-        Preparing to process large dataset with {} records", 
-        total_records
-    );
-
     // Enhanced channel creation with larger buffer and bounded capacity
     let (work_sender, work_receiver) = crossbeam_channel::bounded(CHANNEL_BUFFER_SIZE);
     let (result_sender, result_receiver) = crossbeam_channel::bounded(processor.num_workers);
@@ -778,7 +631,9 @@ where
     let result_collection_timeout = Duration::from_secs(600); // 10-minute timeout
     let collection_start = std::time::Instant::now();
 
-    for _ in 0..processor.num_workers {
+    let mut completed_workers = 0;
+
+    while completed_workers < processor.num_workers {
         // Break if timeout occurs
         if collection_start.elapsed() > result_collection_timeout {
             log::error!("Result collection timed out");
@@ -787,6 +642,12 @@ where
 
         match result_receiver.recv_timeout(Duration::from_secs(30)) {
             Ok((successful, failed, errors)) => {
+                // Check for special completion signal
+                if successful == usize::MAX {
+                    completed_workers += 1;
+                    continue;
+                }
+
                 log::debug!(
                     "Worker result - Successful: {}, Failed: {}, Errors: {}",
                     successful, 
@@ -818,13 +679,14 @@ where
         "Large dataset processing complete. 
         Total Sent: {}
         Total Successful: {}, 
-        Total Failed: {}, Total Errors: {}",
+        Total Faile d: {}, 
+        Total Errors: {}",
         sent_count,
         overall_result.successful,
         overall_result.failed,
         overall_result.errors.len()
     );
-    progress_callback_clone(1.0);
 
+    // Return the overall processing result
     Ok(overall_result)
 }

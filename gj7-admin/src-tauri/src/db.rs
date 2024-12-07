@@ -66,7 +66,6 @@ impl Clone for Database {
 
 impl Database {
     pub fn create_parallel_csv_validator(&self) -> ParallelCsvValidator {
-        // Use the connection from the pool
         let connection = self.pool.get()
             .expect("Failed to get database connection");
         
@@ -109,18 +108,30 @@ impl Database {
             .with_init(|conn| {
                 conn.execute_batch("
                     PRAGMA journal_mode=WAL;
-                    PRAGMA synchronous=NORMAL;
-                    PRAGMA cache_size=-20000;
-                    PRAGMA busy_timeout=10000;
+                    PRAGMA synchronous=FULL;
+                    PRAGMA cache_size=-2000000;
+                    PRAGMA busy_timeout=300000;
                     PRAGMA temp_store=MEMORY;
+                    PRAGMA max_page_count=2097152;
+                    PRAGMA page_size=65536;
+                    PRAGMA encoding='UTF-8';
+                    PRAGMA foreign_keys=ON;
+                    PRAGMA read_uncommitted=1;
+                    PRAGMA threads=16;
+                    PRAGMA max_pending_statements=1000;
+                    PRAGMA query_only=0;
+                    PRAGMA optimize;
                 ")?;
                 Ok(())
             });
 
         let pool = Pool::builder()
-            .max_size(20) 
-            .connection_timeout(Duration::from_secs(30))
-            .idle_timeout(Some(Duration::from_secs(300)))
+            .max_size(250)  // Maximum concurrent connections
+            .min_idle(Some(50))  // Minimum idle connections
+            .connection_timeout(Duration::from_secs(600))  // 10-minute connection timeout
+            .idle_timeout(Some(Duration::from_secs(3600)))  // 1-hour idle timeout
+            .max_lifetime(Some(Duration::from_secs(7200)))  // 2-hour max connection life
+            .test_on_check_out(true)
             .build(manager)?;
         
         // Use pool's connection for initial setup
@@ -150,7 +161,6 @@ impl Database {
         })
     }
 
-    // Similar error handling for other methods
     pub async fn with_connection<F, T>(&self, f: F) -> Result<T, Box<dyn std::error::Error>>
     where
         F: FnOnce(&Connection) -> Result<T>
@@ -161,7 +171,6 @@ impl Database {
         f(&conn).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
     }
 }
-
 
 fn get_database_path(db_dir: &PathBuf) -> Result<PathBuf, String> {
     let db_name = config::load_database_name()
