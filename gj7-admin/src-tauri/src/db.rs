@@ -111,7 +111,8 @@ impl Database {
                     PRAGMA journal_mode=WAL;
                     PRAGMA synchronous=NORMAL;
                     PRAGMA cache_size=-20000;
-                    PRAGMA busy_timeout=5000;
+                    PRAGMA busy_timeout=10000;
+                    PRAGMA temp_store=MEMORY;
                 ")?;
                 Ok(())
             });
