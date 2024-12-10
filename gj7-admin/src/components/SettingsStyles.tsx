@@ -119,8 +119,13 @@ const SettingsStyles: React.FC = () => {
   // Update style
   const handleUpdateStyle = async (styleId: number, updatedStyle: UpdateSettingsStyleRequest) => {
     try {
-      await SettingsStylesApi.updateSettingsStyle(styleId, updatedStyle, credentials.username, credentials.password)
-      await fetchStyles()
+      await SettingsStylesApi.updateSettingsStyle(
+        styleId, 
+        updatedStyle, 
+        credentials.username, 
+        credentials.password
+      )
+      // No need to fetch all styles, as the color is already updated locally
       setError(null)
       addToast('Style updated successfully', 'success')
     } catch (err) {
