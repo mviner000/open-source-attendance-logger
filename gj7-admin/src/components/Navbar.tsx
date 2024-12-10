@@ -1,15 +1,25 @@
+// Navbar.tsx
+
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import NetworkStatus from './NetworkStatus'
+import { useNavbarColor } from '@/hooks/useNavbarColor'
 
 const Navbar: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  
+  const { navbarColor } = useNavbarColor()
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen)
 
   return (
-    <nav className="bg-[#0D2F16] shadow-sm fixed top-0 left-0 right-0 z-50">
+    <nav 
+    style={{
+      backgroundColor: navbarColor
+    }}
+      className="shadow-sm fixed top-0 left-0 right-0 z-50"
+    >
       <div className="w-full mx-auto sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           {/* Left side: Logo, text, and navigation links */}
@@ -33,6 +43,9 @@ const Navbar: React.FC = () => {
               </NavLink>
               <NavLink to="/purpose/manager">
                 Purpose Manager
+              </NavLink>
+              <NavLink to="/settings">
+                Settings
               </NavLink>
             </div>
           </div>
@@ -63,6 +76,9 @@ const Navbar: React.FC = () => {
             </NavLink>
             <NavLink to="/purpose/manager" mobile>
               Purpose Manager
+            </NavLink>
+            <NavLink to="/settings">
+              Settings
             </NavLink>
           </div>
           <div className="px-2 py-3">
@@ -96,4 +112,3 @@ const NavLink: React.FC<NavLinkProps> = ({ to, children, onClick, mobile }) => (
 )
 
 export default Navbar
-

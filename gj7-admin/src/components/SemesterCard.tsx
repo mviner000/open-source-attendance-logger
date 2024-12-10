@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { SquarePen, Search, ChevronDown, UsersRound, UserX, Users } from 'lucide-react';
+import { SquarePen, Search, ChevronDown, UsersRound, Users } from 'lucide-react';
 
 interface Semester {
   label: string;

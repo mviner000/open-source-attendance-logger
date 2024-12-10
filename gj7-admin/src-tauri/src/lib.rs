@@ -1,4 +1,4 @@
-// src/lib.rs server pc codes
+// src/lib.rs
 
 pub mod db;
 mod network;
@@ -11,6 +11,7 @@ mod csv_commands;
 mod semester_commands;
 mod purpose_commands;
 mod attendance_commands;
+mod settings_styles_commands;
 mod network_server;
 mod websocket;
 mod logger;
@@ -198,6 +199,15 @@ pub fn run() {
                 attendance_commands::delete_attendance,
                 attendance_commands::get_attendances_by_semester,
                 attendance_commands::get_attendances_by_school_account,
+
+                // Settings Styles commands
+                settings_styles_commands::create_settings_style,
+                settings_styles_commands::get_all_settings_styles,
+                settings_styles_commands::get_settings_style,
+                settings_styles_commands::update_settings_style,
+                settings_styles_commands::delete_settings_style,
+                settings_styles_commands::search_settings_styles,
+                settings_styles_commands::get_settings_style_by_component_name,
 
                 // Network check
                 check_network

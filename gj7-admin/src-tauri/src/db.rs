@@ -19,6 +19,7 @@ pub mod csv_transform;
 pub mod semester;
 pub mod attendance;
 pub mod purpose;
+pub mod settings_styles;
 
 use notes::NotesDatabase;
 use auth::AuthDatabase;
@@ -26,6 +27,7 @@ use school_accounts::{SchoolAccountRepository, SqliteSchoolAccountRepository};
 use semester::{SemesterRepository, SqliteSemesterRepository};
 use attendance::{AttendanceRepository, SqliteAttendanceRepository};
 use purpose::{PurposeRepository, SqlitePurposeRepository};
+use settings_styles::SettingsStylesDatabase;
 use std::sync::Arc;
 use crate::parallel_csv_validator::ParallelCsvValidator;
 
@@ -43,6 +45,7 @@ pub struct Database {
     pub semester_repository: Box<dyn SemesterRepository + Send + Sync>,
     pub attendance_repository: Arc<dyn AttendanceRepository + Send + Sync>,
     pub purpose_repository: Arc<dyn PurposeRepository + Send + Sync>,
+    pub settings_styles: SettingsStylesDatabase,
     db_path: PathBuf,
 }
 
@@ -59,6 +62,7 @@ impl Clone for Database {
             semester_repository: Box::new(SqliteSemesterRepository),
             attendance_repository: Arc::new(SqliteAttendanceRepository),
             purpose_repository: Arc::new(SqlitePurposeRepository),
+            settings_styles: self.settings_styles.clone(),
             db_path: self.db_path.clone(),
         }
     }
@@ -147,6 +151,7 @@ impl Database {
         
         let notes_db = NotesDatabase::init(&conn)?;
         let auth_db = AuthDatabase::init(&conn)?;
+        let settings_styles_db = SettingsStylesDatabase::init(&conn)?;
         
         info!("Database initialization completed successfully");
         Ok(Database {
@@ -157,6 +162,7 @@ impl Database {
             semester_repository: Box::new(SqliteSemesterRepository),
             attendance_repository: Arc::new(SqliteAttendanceRepository),
             purpose_repository: Arc::new(SqlitePurposeRepository),
+            settings_styles: settings_styles_db,
             db_path,
         })
     }

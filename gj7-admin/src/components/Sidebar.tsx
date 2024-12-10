@@ -7,7 +7,8 @@ const Sidebar: React.FC = () => {
   const sidebarLinks = [
     { path: '/attendance/realtime', label: 'Statistics Records' },
     { path: '/accounts/paginated', label: 'School Accounts' },
-    { path: '/purpose/manager', label: ' Purpose Manager' }
+    { path: '/purpose/manager', label: 'Purpose Manager' },
+    { path: '/settings', label: 'Settings' }
   ]
 
   const isActive = (path: string) => {
