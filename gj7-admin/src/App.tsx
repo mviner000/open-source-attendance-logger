@@ -8,12 +8,12 @@ import { SchoolAccountsDataTable } from "./components/SchoolAccountsDataTable";
 import PurposeManager from "./components/PurposeManager";
 import About from "./components/About";
 import SettingsStyles from "./components/SettingsStyles";
-import { NavbarColorProvider } from "./hooks/useNavbarColor";
+import { NavbarSettingsProvider } from "./hooks/useNavbarSettings";
 
 
 function App() {
   return (
-    <NavbarColorProvider>
+    <NavbarSettingsProvider>
       <Router>
         <div className="app min-h-screen bg-gradient-to-b from-[#ffe8c2] to-[#2F4A34] flex flex-col">
           <Navbar />
@@ -40,7 +40,7 @@ function App() {
           </div>
         </div>
       </Router>
-    </NavbarColorProvider>
+    </NavbarSettingsProvider>
   );
 }
 

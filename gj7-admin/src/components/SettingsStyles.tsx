@@ -127,7 +127,7 @@ const SettingsStyles: React.FC = () => {
       )
       // No need to fetch all styles, as the color is already updated locally
       setError(null)
-      addToast('Style updated successfully', 'success')
+      // addToast('Style updated successfully', 'success')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update style')
       addToast('Failed to update style', 'error')
@@ -205,13 +205,11 @@ const SettingsStyles: React.FC = () => {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {styles.map((style) => (
-            <SettingsStylesCard
-              key={style.id}
-              style={style}
-              onUpdate={handleUpdateStyle}
-            />
-          ))}
+          <div>
+            {styles.length > 0 && (
+              <SettingsStylesCard />
+            )}
+          </div>
         </div>
       </div>
       <ToastViewport />

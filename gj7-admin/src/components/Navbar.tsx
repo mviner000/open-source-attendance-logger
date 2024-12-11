@@ -4,20 +4,20 @@ import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import NetworkStatus from './NetworkStatus'
-import { useNavbarColor } from '@/hooks/useNavbarColor'
+import { useNavbarSettings } from '@/hooks/useNavbarSettings'
 
 const Navbar: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   
-  const { navbarColor } = useNavbarColor()
+  const { navbarColor, brandLabel } = useNavbarSettings()
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen)
 
   return (
     <nav 
-    style={{
-      backgroundColor: navbarColor
-    }}
+      style={{
+        backgroundColor: navbarColor
+      }}
       className="shadow-sm fixed top-0 left-0 right-0 z-50"
     >
       <div className="w-full mx-auto sm:px-6 lg:px-8">
@@ -31,7 +31,7 @@ const Navbar: React.FC = () => {
                 className="h-10 w-auto object-contain -mt-1.5"
               />
               <span className="ml-2 text-lg font-bold text-gray-100 hidden sm:inline">
-                GJC Attendance Admin Server
+                {brandLabel}
               </span>
             </Link>
             <div className="hidden md:flex items-center space-x-4">

@@ -10,6 +10,7 @@ pub struct SettingsStyle {
     pub id: Option<i64>,
     pub component_name: String,
     pub tailwind_classes: String,
+    pub label: Option<String>,
     #[serde(with = "chrono::serde::ts_seconds")]
     pub created_at: DateTime<Utc>,
     #[serde(with = "chrono::serde::ts_seconds")]
@@ -20,12 +21,14 @@ pub struct SettingsStyle {
 pub struct CreateSettingsStyleRequest {
     pub component_name: String,
     pub tailwind_classes: String,
+    pub label: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateSettingsStyleRequest {
     pub component_name: Option<String>,
     pub tailwind_classes: Option<String>,
+    pub label: Option<Option<String>>,
 }
 
 #[derive(Clone)]
@@ -38,6 +41,7 @@ impl SettingsStylesDatabase {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 component_name TEXT NOT NULL,
                 tailwind_classes TEXT NOT NULL,
+                label TEXT,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
             )",
@@ -67,15 +71,16 @@ impl SettingsStylesDatabase {
             id: Some(row.get(0)?),
             component_name: row.get(1)?,
             tailwind_classes: row.get(2)?,
-            created_at: Self::timestamp_to_datetime(row.get(3)?),
-            updated_at: Self::timestamp_to_datetime(row.get(4)?),
+            label: row.get(3)?,
+            created_at: Self::timestamp_to_datetime(row.get(4)?),
+            updated_at: Self::timestamp_to_datetime(row.get(5)?),
         })
     }
 
     pub fn get_settings_style_by_component_name(&self, conn: &Connection, component_name: &str) -> Result<SettingsStyle, String> {
         info!("Fetching settings style for component: {}", component_name);
         let mut stmt = conn.prepare(
-            "SELECT id, component_name, tailwind_classes, created_at, updated_at 
+            "SELECT id, component_name, tailwind_classes, label, created_at, updated_at 
              FROM settings_styles 
              WHERE component_name = ?"
         ).map_err(|e| e.to_string())?;
@@ -92,7 +97,7 @@ impl SettingsStylesDatabase {
     pub fn get_settings_style(&self, conn: &Connection, id: i64) -> Result<SettingsStyle, String> {
         info!("Fetching settings style with id: {}", id);
         let mut stmt = conn.prepare(
-            "SELECT id, component_name, tailwind_classes, created_at, updated_at FROM settings_styles WHERE id = ?"
+            "SELECT id, component_name, tailwind_classes, label, created_at, updated_at FROM settings_styles WHERE id = ?"
         ).map_err(|e| e.to_string())?;
 
         let settings_style = stmt.query_row(params![id], Self::row_to_settings_style)
@@ -108,13 +113,13 @@ impl SettingsStylesDatabase {
         let timestamp = Self::datetime_to_timestamp(&now);
         
         let mut stmt = conn.prepare(
-            "INSERT INTO settings_styles (component_name, tailwind_classes, created_at, updated_at) 
-             VALUES (?1, ?2, ?3, ?4) 
-             RETURNING id, component_name, tailwind_classes, created_at, updated_at"
+            "INSERT INTO settings_styles (component_name, tailwind_classes, label, created_at, updated_at) 
+             VALUES (?1, ?2, ?3, ?4, ?5) 
+             RETURNING id, component_name, tailwind_classes, label, created_at, updated_at"
         ).map_err(|e| e.to_string())?;
 
         let result = stmt.query_row(
-            params![settings_style.component_name, settings_style.tailwind_classes, timestamp, timestamp],
+            params![settings_style.component_name, settings_style.tailwind_classes, settings_style.label, timestamp, timestamp],
             Self::row_to_settings_style
         ).map_err(|e| e.to_string())?;
         
@@ -125,7 +130,7 @@ impl SettingsStylesDatabase {
     pub fn get_all_settings_styles(&self, conn: &Connection) -> Result<Vec<SettingsStyle>, String> {
         info!("Fetching all settings styles");
         let mut stmt = conn.prepare(
-            "SELECT id, component_name, tailwind_classes, created_at, updated_at FROM settings_styles ORDER BY updated_at DESC"
+            "SELECT id, component_name, tailwind_classes, label, created_at, updated_at FROM settings_styles ORDER BY updated_at DESC"
         ).map_err(|e| e.to_string())?;
 
         let settings_styles = stmt.query_map(
@@ -148,16 +153,17 @@ impl SettingsStylesDatabase {
         let timestamp = Self::datetime_to_timestamp(&now);
         let component_name = settings_style.component_name.unwrap_or(existing.component_name);
         let tailwind_classes = settings_style.tailwind_classes.unwrap_or(existing.tailwind_classes);
+        let label = settings_style.label.unwrap_or(existing.label);
 
         let mut stmt = conn.prepare(
             "UPDATE settings_styles 
-             SET component_name = ?1, tailwind_classes = ?2, updated_at = ?3 
-             WHERE id = ?4
-             RETURNING id, component_name, tailwind_classes, created_at, updated_at"
+             SET component_name = ?1, tailwind_classes = ?2, label = ?3, updated_at = ?4 
+             WHERE id = ?5
+             RETURNING id, component_name, tailwind_classes, label, created_at, updated_at"
         ).map_err(|e| e.to_string())?;
 
         let result = stmt.query_row(
-            params![component_name, tailwind_classes, timestamp, id],
+            params![component_name, tailwind_classes, label, timestamp, id],
             Self::row_to_settings_style
         ).map_err(|e| e.to_string())?;
 
@@ -170,9 +176,9 @@ impl SettingsStylesDatabase {
         let search_pattern = format!("%{}%", query);
         
         let mut stmt = conn.prepare(
-            "SELECT id, component_name, tailwind_classes, created_at, updated_at 
+            "SELECT id, component_name, tailwind_classes, label, created_at, updated_at 
              FROM settings_styles 
-             WHERE component_name LIKE ?1 OR tailwind_classes LIKE ?1 
+             WHERE component_name LIKE ?1 OR tailwind_classes LIKE ?1 OR label LIKE ?1
              ORDER BY updated_at DESC"
         ).map_err(|e| e.to_string())?;
 

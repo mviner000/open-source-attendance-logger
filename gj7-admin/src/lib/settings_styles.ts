@@ -8,6 +8,7 @@ export interface SettingsStyle {
   id?: number;
   component_name: string;
   tailwind_classes: string;
+  label?: string;
   created_at: number;
   updated_at: number;
 }
@@ -16,6 +17,7 @@ export interface SettingsStyleWithDates {
   id?: number;
   component_name: string;
   tailwind_classes: string;
+  label?: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -23,11 +25,13 @@ export interface SettingsStyleWithDates {
 export interface CreateSettingsStyleRequest {
   component_name: string;
   tailwind_classes: string;
+  label?: string;
 }
 
 export interface UpdateSettingsStyleRequest {
   component_name?: string;
   tailwind_classes?: string;
+  label?: string | null;
 }
 
 function convertToDateSettingsStyle(settingsStyle: SettingsStyle): SettingsStyleWithDates {
@@ -49,7 +53,7 @@ export const SettingsStylesApi = {
             logger.log(`Failed to fetch settings style for component ${componentName}: ${error}`, 'error');
             throw error;
         }
-        },
+    },
         
     async getCredentials(): Promise<Credentials> {
         try {
@@ -109,9 +113,9 @@ export const SettingsStylesApi = {
         password: string
     ): Promise<SettingsStyleWithDates> {
         try {
-        logger.log(`Updating settings style ${id}`, 'info');
+        // logger.log(`Updating settings style ${id}`, 'info');
         const result = await invoke('update_settings_style', { id, settingsStyle, username, password });
-        logger.log(`Successfully updated settings style ${id}`, 'success');
+        // logger.log(`Successfully updated settings style ${id}`, 'success');
         return convertToDateSettingsStyle(result as SettingsStyle);
         } catch (error) {
         logger.log(`Failed to update settings style ${id}: ${error}`, 'error');
