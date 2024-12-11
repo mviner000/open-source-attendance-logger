@@ -1,7 +1,7 @@
 // old SettingsStyles.tsx
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { SettingsStylesApi, SettingsStyleWithDates, CreateSettingsStyleRequest, UpdateSettingsStyleRequest } from '../lib/settings_styles'
+import { SettingsStylesApi, SettingsStyleWithDates, CreateSettingsStyleRequest } from '../lib/settings_styles'
 import { logger, LogLevel } from '../lib/logger'
 import { ToastProvider, ToastViewport } from "@/components/ui/toast"
 import { useToast } from '@/hooks/use-toast'
@@ -116,24 +116,6 @@ const SettingsStyles: React.FC = () => {
     }
   }
 
-  // Update style
-  const handleUpdateStyle = async (styleId: number, updatedStyle: UpdateSettingsStyleRequest) => {
-    try {
-      await SettingsStylesApi.updateSettingsStyle(
-        styleId, 
-        updatedStyle, 
-        credentials.username, 
-        credentials.password
-      )
-      // No need to fetch all styles, as the color is already updated locally
-      setError(null)
-      // addToast('Style updated successfully', 'success')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update style')
-      addToast('Failed to update style', 'error')
-    }
-  }
-
   // Delete style after authentication
   const deleteStyle = async (styleId: number, auth: { username: string; password: string }) => {
     try {
@@ -183,10 +165,9 @@ const SettingsStyles: React.FC = () => {
             {error}
           </div>
         )}
-
-
-        <CreateSettingsStylesForm onCreateSettingsStyle={createStyle} />
-
+        <div className='hidden'>
+          <CreateSettingsStylesForm onCreateSettingsStyle={createStyle} />
+        </div>
         <SearchBar
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}

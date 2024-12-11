@@ -44,14 +44,14 @@ const Navbar: React.FC = () => {
               <NavLink to="/purpose/manager">
                 Purpose Manager
               </NavLink>
-              <NavLink to="/settings">
-                Settings
-              </NavLink>
             </div>
           </div>
 
           {/* Right side: Network Status */}
           <div className="flex items-center lg:pr-6">
+              <NavLink to="/settings">
+                Settings
+              </NavLink>
             <div className="hidden md:block">
               <NetworkStatus />
             </div>
