@@ -1,9 +1,12 @@
+// src/first_launch.rs
+
 use std::fs;
 use log::info;
 use rusqlite::Connection;
 use tauri::AppHandle;
 use crate::db::auth::{AuthDatabase, Credentials as AuthCredentials};
 use crate::db::purpose::{PurposeRepository, SqlitePurposeRepository, CreatePurposeRequest};
+use crate::db::settings_styles::{SettingsStylesDatabase, CreateSettingsStyleRequest};
 use crate::config;
 use crate::storage::AppStorage;
 
@@ -23,14 +26,12 @@ fn create_initial_purposes(conn: &Connection) -> Result<(), String> {
     ];
 
     for purpose_req in initial_purposes {
-        // Check if purpose already exists before creating
         match purpose_repo.get_purpose_by_label(conn, &purpose_req.label) {
             Ok(_) => {
                 info!("Purpose '{}' already exists, skipping", purpose_req.label);
                 continue;
             }
             Err(rusqlite::Error::QueryReturnedNoRows) => {
-                // Purpose doesn't exist, so create it
                 purpose_repo.create_purpose(conn, purpose_req.clone())
                     .map_err(|e| format!("Failed to create purpose {}: {}", purpose_req.label, e.to_string()))?;
                 info!("Created initial purpose: {}", purpose_req.label);
@@ -42,47 +43,75 @@ fn create_initial_purposes(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
+fn create_initial_settings_styles(conn: &Connection) -> Result<(), String> {
+    let settings_styles_db = SettingsStylesDatabase;
+    
+    let initial_styles = vec![
+        CreateSettingsStyleRequest {
+            component_name: "navbar-color".to_string(),
+            tailwind_classes: "bg-[#0D2F16]".to_string(),
+            label: None,
+        },
+        CreateSettingsStyleRequest {
+            component_name: "brand-name".to_string(),
+            tailwind_classes: "bg-[#00dd4a]".to_string(),
+            label: Some("GJC Attendance Server".to_string()),
+        },
+    ];
+
+    for style_req in initial_styles {
+        match settings_styles_db.get_settings_style_by_component_name(conn, &style_req.component_name) {
+            Ok(_) => {
+                info!("Settings style '{}' already exists, skipping", style_req.component_name);
+                continue;
+            }
+            Err(_) => {
+                settings_styles_db.create_settings_style(conn, style_req.clone())
+                    .map_err(|e| format!("Failed to create settings style {}: {}", style_req.component_name, e))?;
+                info!("Created initial settings style: {}", style_req.component_name);
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub fn handle_first_launch(_app_handle: &AppHandle) -> Result<(), String> {
     info!("Checking for first launch configuration...");
     
-    // Get storage instance
     let storage = AppStorage::new()
         .ok_or_else(|| "Failed to initialize app storage".to_string())?;
     
-    // Initialize storage directories
     storage.initialize()
         .map_err(|e| format!("Failed to initialize storage directories: {}", e.to_string()))?;
     
-    // Check if database_name.txt already exists
     if let Ok(existing_db_name) = config::load_database_name() {
         info!("Database name already exists: {}", existing_db_name);
         return Ok(());
     }
     
-    // If no database_name.txt, try to load config
     let config = config::load_config()
         .map_err(|_| "No existing database and config file not found".to_string())?;
     
-    // Save database name to database_name.txt
     config::save_database_name(&config.database.database_name)
         .map_err(|e| e.to_string())?;
     
-    // Get database path
     let db_path = storage.get_database_path(&config.database.database_name);
     
-    // Open database connection
     let conn = Connection::open(&db_path)
         .map_err(|e| e.to_string())?;
     
-    // Initialize auth database
     let auth_db = AuthDatabase::init(&conn)
         .map_err(|e| e.to_string())?;
 
-    // Create purposes table BEFORE trying to create initial purposes
+    // Initialize settings styles database
+    SettingsStylesDatabase::init(&conn)
+        .map_err(|e| e.to_string())?;
+
+    // Initialize purposes table
     crate::db::purpose::create_purposes_table(&conn)
         .map_err(|e| e.to_string())?;
     
-    // Create initial user if not exists
     if !auth_db.user_exists(&conn)
         .map_err(|e| e.to_string())? 
     {
@@ -96,10 +125,10 @@ pub fn handle_first_launch(_app_handle: &AppHandle) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     }
 
-    // Create initial purposes
+    // Create initial purposes and settings styles
     create_initial_purposes(&conn)?;
+    create_initial_settings_styles(&conn)?;
     
-    // Delete config file
     let config_path = storage.get_config_file_path();
     if config_path.exists() {
         fs::remove_file(&config_path)

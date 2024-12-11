@@ -17,7 +17,7 @@ pub struct SettingsStyle {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CreateSettingsStyleRequest {
     pub component_name: String,
     pub tailwind_classes: String,

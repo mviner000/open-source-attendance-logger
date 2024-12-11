@@ -57,7 +57,7 @@ const SettingsStylesCard: React.FC = () => {
             }}
             onKeyPress={handleKeyPress}
             autoFocus
-            className="flex-grow"
+            className="w-1/2 text-white"
           />
           <Button 
             onClick={handleBrandLabelUpdate} 
@@ -84,7 +84,7 @@ const SettingsStylesCard: React.FC = () => {
 
     return (
       <div 
-        className='bg-green-600 text-white p-1 rounded cursor-text hover:bg-green-700'
+        className='text-white p-1 rounded cursor-text hover:bg-slate-700/50'
         onClick={() => {
           try {
             setLocalBrandLabel(brandLabel)
@@ -122,15 +122,15 @@ const SettingsStylesCard: React.FC = () => {
                 className="mb-4 w-full h-[150px]"
               />
               <div className="flex items-center space-x-2">
+              <Button variant="outlineAmber3d"  size="icon" onClick={cancelColorChange} className='px-8 border-red-400 hover:bg-red-50 hover:border-red-600'>Undo</Button>
                 <Input
                   type="text"
                   value={tempNavbarColor}
                   onChange={(e) => handleColorChange(e.target.value)}
-                  className="flex-grow"
+                  className="w-20"
                   placeholder="#660099"
                 />
-                <Button onClick={() => saveNavbarColor()}>Save</Button>
-                <Button variant="outline" onClick={cancelColorChange}>Cancel</Button>
+                <Button variant="outlineAmber3d" size="icon" onClick={() => saveNavbarColor()} className='p-4'><Save className="h-4 w-4 text-gray-800" /></Button>
               </div>
             </div>
           </PopoverContent>
