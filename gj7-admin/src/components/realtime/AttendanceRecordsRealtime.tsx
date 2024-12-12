@@ -13,6 +13,7 @@ import SearchBar from '../SearchBar';
 import ViewToggle from '../ViewToggle';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { AttendanceWithDates, convertToAttendanceWithDates } from '@/types/attendance';
+import FilteredAttendanceTable from '../FilteredAttendanceTable';
 
 const AttendanceRecordsRealtime: React.FC = () => {
   const { attendances: rawAttendances, isConnected, sendAttendance } = useAttendanceWebSocket();
@@ -111,6 +112,11 @@ const AttendanceRecordsRealtime: React.FC = () => {
   return (
     <ToastProvider>
       <div className="max-w-screen-xl mx-auto mt-5 mb-5 px-4 sm:px-6 lg:px-0">
+      <FilteredAttendanceTable
+        initialCourse="BSIT"
+        initialDate={new Date()}
+      />
+
         {!isConnected && (
           <Alert variant="destructive" className="mb-4">
             <AlertTitle>Connection Lost</AlertTitle>
@@ -132,10 +138,12 @@ const AttendanceRecordsRealtime: React.FC = () => {
             setSearchQuery={setSearchQuery}
             handleClearSearch={handleClearSearch}
           />
+          <div className='hidden'>
           <ViewToggle
             view={view} 
             onViewChange={setView} 
           />
+          </div>
             <Button size="sm" variant="amber3d" onClick={handleDownloadPDF} className="py-[18px]">
               Download Attendance Table in PDF
             </Button>

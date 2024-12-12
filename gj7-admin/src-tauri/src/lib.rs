@@ -166,6 +166,7 @@ pub fn run() {
                 school_account_commands::get_school_account_with_semester,
                 school_account_commands::update_school_account_semester,
                 school_account_commands::get_dashboard_stats,
+                school_account_commands::get_school_accounts_by_course,
 
                 // CSV commands
                 csv_commands::validate_csv_file,
@@ -199,6 +200,8 @@ pub fn run() {
                 attendance_commands::delete_attendance,
                 attendance_commands::get_attendances_by_semester,
                 attendance_commands::get_attendances_by_school_account,
+                attendance_commands::get_filtered_attendances,
+                attendance_commands::get_all_courses,
 
                 // Settings Styles commands
                 settings_styles_commands::create_settings_style,

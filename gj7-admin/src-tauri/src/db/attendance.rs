@@ -43,6 +43,13 @@ pub trait AttendanceRepository: Send + Sync {
     fn get_attendances_by_semester(&self, conn: &Connection, semester_id: Uuid) -> Result<Vec<Attendance>>;
     fn get_attendances_by_school_account(&self, conn: &Connection, school_account_id: Uuid) -> Result<Vec<Attendance>>;
     fn get_last_n_attendances(&self, conn: &Connection, n: usize) -> Result<Vec<Attendance>, rusqlite::Error>;
+    fn get_filtered_attendances(
+        &self, 
+        conn: &Connection, 
+        course: Option<String>, 
+        date: Option<DateTime<Utc>>
+    ) -> Result<Vec<Attendance>>;
+    fn get_all_courses(&self, conn: &Connection) -> Result<Vec<String>>;
 }
 
 // Implement Clone for SqliteAttendanceRepository
@@ -58,6 +65,98 @@ impl AttendanceRepository for SqliteAttendanceRepository {
     fn clone_box(&self) -> Box<dyn AttendanceRepository + Send + Sync> {
         Box::new(self.clone())
     }
+
+    fn get_all_courses(&self, conn: &Connection) -> Result<Vec<String>> {
+        let query = "
+            SELECT DISTINCT course 
+            FROM school_accounts 
+            WHERE course IS NOT NULL AND course != '' 
+            ORDER BY course ASC
+        ";
+        
+        let mut stmt = conn.prepare(query)?;
+        let course_iter = stmt.query_map([], |row| {
+            row.get::<_, String>(0)
+        })?;
+
+        let mut courses = Vec::new();
+        for course in course_iter {
+            courses.push(course?);
+        }
+
+        Ok(courses)
+    }
+
+    fn get_filtered_attendances(
+        &self, 
+        conn: &Connection, 
+        course: Option<String>, 
+        date: Option<DateTime<Utc>>
+    ) -> Result<Vec<Attendance>> {
+        // Base query with flexible filtering
+        let mut query = String::from("
+            SELECT DISTINCT a.* FROM attendance a
+            LEFT JOIN school_accounts sa ON a.school_id = sa.school_id
+            WHERE 1=1
+        ");
+    
+        // Prepare parameters for the query
+        let mut param_conditions = Vec::new();
+        let mut param_values = Vec::new();
+    
+        // Add course filter if specified
+        if let Some(course_name) = course {
+            param_conditions.push("sa.course = ?");
+            param_values.push(course_name);
+        }
+    
+        // Add date filter if specified (exact date match)
+        if let Some(filter_date) = date {
+            // Match the entire day
+            param_conditions.push("date(a.time_in_date) = date(?)");
+            param_values.push(filter_date.to_rfc3339());
+        }
+    
+        // Add conditions to query if any
+        if !param_conditions.is_empty() {
+            query.push_str(" AND ");
+            query.push_str(&param_conditions.join(" AND "));
+        }
+    
+        // Add ordering
+        query.push_str(" ORDER BY a.time_in_date DESC");
+    
+        // Prepare the statement with dynamic parameters
+        let mut stmt = conn.prepare(&query)?;
+        
+        let attendance_iter = stmt.query_map(rusqlite::params_from_iter(param_values.iter().map(|v| v.as_str())), |row| {
+            let time_in_str: String = row.get(3)?;
+            let time_in_date = DateTime::parse_from_rfc3339(&time_in_str)
+                .map(|dt| dt.with_timezone(&Utc))
+                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
+                    3,
+                    rusqlite::types::Type::Text,
+                    Box::new(e)
+                ))?;
+    
+            Ok(Attendance {
+                id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
+                school_id: row.get(1)?,
+                full_name: row.get(2)?,
+                time_in_date,
+                classification: row.get(4)?,
+                purpose_label: row.get(5)?,
+            })
+        })?;
+    
+        let mut attendances = Vec::new();
+        for attendance in attendance_iter {
+            attendances.push(attendance?);
+        }
+    
+        Ok(attendances)
+    }
+    
     
     fn create_attendance(&self, conn: &Connection, attendance: CreateAttendanceRequest) -> Result<Attendance> {
         if attendance.school_id.is_empty() {
@@ -122,6 +221,8 @@ impl AttendanceRepository for SqliteAttendanceRepository {
         
         Ok(created_attendance)
     }
+
+    
 
     fn get_attendance(&self, conn: &Connection, id: Uuid) -> Result<Attendance> {
         let attendance = conn.query_row(

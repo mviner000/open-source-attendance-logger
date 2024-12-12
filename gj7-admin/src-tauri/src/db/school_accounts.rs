@@ -115,6 +115,14 @@ pub trait SchoolAccountRepository: Send {
     ) -> Result<PaginatedSchoolAccounts>;
 
     fn get_account_status_counts(&self, conn: &Connection) -> Result<AccountStatusCounts>;
+
+    // Add this to the SchoolAccountRepository trait
+    fn get_school_accounts_by_course(
+        &self, 
+        conn: &Connection, 
+        course: &str, 
+        semester_id: Option<Uuid>
+    ) -> Result<Vec<SchoolAccount>>;
 }
 
 pub struct SqliteSchoolAccountRepository;
@@ -188,6 +196,64 @@ impl From<CreateSchoolAccountRequest> for UpdateSchoolAccountRequest {
 
 // Implement the repository for a specific database type (e.g., SQLite)
 impl SchoolAccountRepository for SqliteSchoolAccountRepository {
+    fn get_school_accounts_by_course(
+        &self, 
+        conn: &Connection, 
+        course: &str, 
+        semester_id: Option<Uuid>
+    ) -> Result<Vec<SchoolAccount>> {
+        // Log the query for traceability
+        info!("Fetching school accounts for course: {}", course);
+    
+        // Prepare the SQL query with optional semester filtering
+        let sql = "SELECT * FROM school_accounts 
+                   WHERE course = ? AND 
+                   (?2 IS NULL OR last_updated_semester_id = ?2)";
+        
+        let mut stmt = conn.prepare(sql)?;
+        
+        // Map rows to SchoolAccount objects
+        let account_iter = stmt.query_map(params![
+            course, 
+            semester_id.map(|id| id.to_string())
+        ], |row| {
+            Ok(SchoolAccount {
+                id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap(),
+                school_id: row.get(1)?,
+                first_name: row.get(2)?,
+                middle_name: row.get(3)?,
+                last_name: row.get(4)?,
+                gender: row.get::<_, Option<i32>>(5)?.map(|g| match g {
+                    0 => Gender::Male,
+                    1 => Gender::Female,
+                    _ => Gender::Other,
+                }),
+                course: row.get(6)?,
+                department: row.get(7)?,
+                position: row.get(8)?,
+                major: row.get(9)?,
+                year_level: row.get(10)?,
+                is_active: row.get(11)?,
+                last_updated_semester_id: row.get::<_, Option<String>>(12)?.map(|id| Uuid::parse_str(&id).unwrap()),
+            })
+        })?;
+    
+        let mut accounts = Vec::new();
+        for account in account_iter {
+            match account {
+                Ok(acc) => accounts.push(acc),
+                Err(e) => {
+                    error!("Error while fetching school account by course: {:?}", e);
+                    return Err(e);
+                }
+            }
+        }
+    
+        // Log the number of accounts found
+        info!("Found {} school accounts for course: {}", accounts.len(), course);
+        
+        Ok(accounts)
+    }
 
     fn create_school_account(&self, conn: &Connection, account: CreateSchoolAccountRequest) -> Result<SchoolAccount> {
         info!("Creating new school account with school_id: {}", account.school_id);

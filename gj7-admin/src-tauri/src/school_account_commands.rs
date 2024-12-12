@@ -67,6 +67,35 @@ fn convert_rusqlite_result<T>(result: rusqlite::Result<T>) -> Result<T, String> 
     result.map_err(|e| e.to_string())
 }
 
+#[derive(Deserialize)]
+pub struct SchoolAccountsByCourseRequest {
+    course: String,
+    semester_id: Option<String>,
+}
+
+#[tauri::command]
+pub async fn get_school_accounts_by_course(
+    state: State<'_, DbState>,
+    request: SchoolAccountsByCourseRequest
+) -> Result<Vec<SchoolAccount>, String> {
+    let db = state.0.clone();
+    let school_accounts = db.school_accounts.clone();
+    
+    // Convert semester_id to UUID if provided
+    let semester_uuid = match &request.semester_id {
+        Some(id) => Some(Uuid::parse_str(id).map_err(|e| e.to_string())?),
+        None => None,
+    };
+
+    db.with_connection(move |conn| {
+        school_accounts.get_school_accounts_by_course(
+            conn, 
+            &request.course, 
+            semester_uuid
+        ).map_err(|_| RusqliteError::InvalidQuery)
+    }).await.map_err(|e| e.to_string())
+}
+
 
 #[tauri::command]
 pub async fn get_all_school_accounts(

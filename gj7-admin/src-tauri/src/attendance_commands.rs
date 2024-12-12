@@ -5,6 +5,32 @@ use crate::DbState;
 use crate::db::attendance::{Attendance, CreateAttendanceRequest, UpdateAttendanceRequest};
 use rusqlite::Result;
 use std::sync::Arc;
+use chrono::{DateTime, Utc};
+
+#[tauri::command]
+pub async fn get_filtered_attendances(
+    state: State<'_, DbState>,
+    course: Option<String>,
+    date: Option<DateTime<Utc>>
+) -> Result<Vec<Attendance>, String> {
+    let db = state.0.clone();
+    let attendance_repo = Arc::clone(&db.attendance_repository);
+    db.with_connection(move |conn| {
+        attendance_repo.get_filtered_attendances(conn, course, date)
+    }).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_all_courses(
+    state: State<'_, DbState>
+) -> Result<Vec<String>, String> {
+    let db = state.0.clone();
+    let attendance_repo = Arc::clone(&db.attendance_repository);
+    
+    db.with_connection(move |conn| {
+        attendance_repo.get_all_courses(conn)
+    }).await.map_err(|e| e.to_string())
+}
 
 #[tauri::command]
 pub async fn create_attendance(

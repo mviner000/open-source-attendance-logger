@@ -1,11 +1,10 @@
-// Attendance.tsx
-
 import React, { useState, useEffect, useCallback } from 'react'
 import { AttendanceApi, CreateAttendanceRequest } from '../lib/attendance'
 import { logger, LogLevel } from '../lib/logger'
 import { ToastProvider, ToastViewport } from "@/components/ui/toast"
 import { useToast } from '@/hooks/use-toast'
 import CreateAttendanceForm from './attendance/CreateAttendanceForm'
+import SchoolAccountsByCourse from './SchoolAccountsByCourse'
 
 const PurposeManager: React.FC = () => {
   // States
@@ -21,7 +20,7 @@ const PurposeManager: React.FC = () => {
     })
   }, [toast])
 
-  // Create attendance 
+  // Create attendance
   const createAttendance = async (
     newAttendance: CreateAttendanceRequest
   ) => {
@@ -33,17 +32,13 @@ const PurposeManager: React.FC = () => {
       addToast('Attendance record created successfully', 'success')
     } catch (err) {
       // Ensure we capture the exact error message
-
-      const errorMessage = err instanceof Error 
-        ? err.message  
-        : String(err)  
-
-
+      const errorMessage = err instanceof Error
+        ? err.message
+        : String(err)
       // Set the specific error message
       setError(errorMessage)
       addToast(errorMessage, 'error')
     }
-
   }
 
   // Effects
@@ -51,7 +46,6 @@ const PurposeManager: React.FC = () => {
     const handleLog = (log: { message: string; level: LogLevel }) => {
       addToast(log.message, log.level)
     }
-
     logger.addListener(handleLog)
     return () => logger.removeListener(handleLog)
   }, [addToast])
@@ -64,6 +58,7 @@ const PurposeManager: React.FC = () => {
             {error}
           </div>
         )}
+        <SchoolAccountsByCourse initialCourse="BSIT" />
         <CreateAttendanceForm onCreateAttendance={createAttendance} />
       </div>
       <ToastViewport />

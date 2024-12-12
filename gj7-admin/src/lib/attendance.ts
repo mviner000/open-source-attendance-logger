@@ -42,6 +42,34 @@ function convertToDateAttendance(attendance: Attendance): AttendanceWithDates {
 }
 
 export const AttendanceApi = {
+  async getAllCourses(): Promise<string[]> {
+    try {
+      logger.log('Fetching all courses', 'info');
+      const courses = await invoke('get_all_courses');
+      logger.log(`Successfully fetched ${(courses as string[]).length} courses`, 'success');
+      return courses as string[];
+    } catch (error) {
+      logger.log(`Failed to fetch courses: ${error}`, 'error');
+      throw error;
+    }
+  },
+
+  async getUnfilteredAttendances(date?: Date): Promise<AttendanceWithDates[]> {
+    try {
+      logger.log('Fetching unfiltered attendances', 'info');
+      
+      const attendances = await invoke('get_unfiltered_attendances', { 
+        date: date?.toISOString() || null
+      });
+      
+      logger.log(`Successfully fetched ${(attendances as Attendance[]).length} unfiltered attendances`, 'success');
+      return (attendances as Attendance[]).map(convertToDateAttendance);
+    } catch (error) {
+      logger.log(`Failed to fetch unfiltered attendances: ${error}`, 'error');
+      throw error;
+    }
+  },
+  
   async getCredentials(): Promise<Credentials> {
     try {
       logger.log('Fetching credentials', 'info');
@@ -65,6 +93,24 @@ export const AttendanceApi = {
       return convertToDateAttendance(result as Attendance);
     } catch (error) {
       logger.log(`Failed to create attendance: ${error}`, 'error');
+      throw error;
+    }
+  },
+
+  async getFilteredAttendances(
+    course?: string, 
+    date?: Date
+  ): Promise<AttendanceWithDates[]> {
+    try {
+      logger.log('Fetching filtered attendances', 'info');
+      const attendances = await invoke('get_filtered_attendances', { 
+        course: course || null, 
+        date: date?.toISOString() || null
+      });
+      logger.log(`Successfully fetched ${(attendances as Attendance[]).length} filtered attendances`, 'success');
+      return (attendances as Attendance[]).map(convertToDateAttendance);
+    } catch (error) {
+      logger.log(`Failed to fetch filtered attendances: ${error}`, 'error');
       throw error;
     }
   },

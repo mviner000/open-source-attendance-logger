@@ -19,6 +19,11 @@ export interface Semester {
   label: string;
 }
 
+export interface SchoolAccountsByCourseRequest {
+  course: string;
+  semester_id?: string;
+}
+
 // Updated SchoolAccount interface with proper semester relationship
 export interface SchoolAccount {
   id: string; // UUID as string
@@ -55,6 +60,20 @@ export interface PaginatedSchoolAccounts {
 
 
 export const SchoolAccountsApi = {
+  async getSchoolAccountsByCourse(request: SchoolAccountsByCourseRequest): Promise<SchoolAccount[]> {
+    try {
+      logger.log(`Fetching school accounts for course: ${request.course}${request.semester_id ? ` in semester ${request.semester_id}` : ''}`, 'info');
+      
+      const accounts = await invoke('get_school_accounts_by_course', { request });
+      
+      logger.log(`Successfully fetched ${(accounts as SchoolAccount[]).length} school accounts for course ${request.course}`, 'success');
+      
+      return accounts as SchoolAccount[];
+    } catch (error) {
+      logger.log(`Failed to fetch school accounts by course: ${error}`, 'error');
+      throw error;
+    }
+  },
   async getDashboardStats(): Promise<DashboardStats> {
     try {
       logger.log('Fetching dashboard stats', 'info');

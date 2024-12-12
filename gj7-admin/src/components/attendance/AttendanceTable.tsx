@@ -17,7 +17,7 @@ interface AttendanceTableProps {
 
 const AttendanceTable: React.FC<AttendanceTableProps> = ({ attendances }) => {
   return (
-    <div className=' bg-white max-w-screen-xl mx-auto mt-5 mb-5 px-4 sm:px-6 lg:px-0'>
+    <div className=' bg-white max-w-screen-xl mx-auto mt-5 mb-5 px-4 sm:px-6 lg:px-0 hidden'>
         <div className='text-center w-full'>
         <img 
             src='/attendance_records_header.png' 
