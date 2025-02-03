@@ -44,6 +44,9 @@ const Navbar: React.FC = () => {
               <NavLink to="/purpose/manager">
                 Purpose Manager
               </NavLink>
+              <NavLink to="/attendance/export">
+                Attendance CSV
+              </NavLink>
             </div>
           </div>
 
@@ -77,6 +80,9 @@ const Navbar: React.FC = () => {
             <NavLink to="/purpose/manager" mobile>
               Purpose Manager
             </NavLink>
+              <NavLink to="/attendance/export" mobile>
+                Attendance CSV
+              </NavLink>
             <NavLink to="/settings">
               Settings
             </NavLink>

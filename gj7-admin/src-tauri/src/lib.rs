@@ -202,6 +202,7 @@ pub fn run() {
                 attendance_commands::get_attendances_by_school_account,
                 attendance_commands::get_filtered_attendances,
                 attendance_commands::get_all_courses,
+                attendance_commands::export_attendances_to_csv,
 
                 // Settings Styles commands
                 settings_styles_commands::create_settings_style,

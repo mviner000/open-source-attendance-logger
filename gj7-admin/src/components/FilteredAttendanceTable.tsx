@@ -109,7 +109,7 @@ export const FilteredAttendanceTable: React.FC<FilteredAttendanceTableProps> = (
             className='mb-4' 
           />
           <p className=''>
-            Updated Daily Record of Library Users SY: 2024-2025 November 20, 2024
+            Updated Daily Record of Library Users SY: 2024-2025
           </p>
         </div>
       </CardHeader>

@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { DURATIONS } from "./steps/config/durations";
 import { ServerConfigModal } from "./ServerConfigModal";
 import { useAttendanceWebSocket } from "@/utils/websocket";
+import { FloatingHearts } from "./floating-hearts";
 
 const InputScanner = () => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -179,6 +180,12 @@ const InputScanner = () => {
             />
           </div>
         </div>
+        
+        {currentStep === 1 && (
+        <div className="col-span-2 flex items-center justify-center">
+          <FloatingHearts />
+        </div>
+      )}
         {currentStep === 2 && renderStep2Content()}
         {currentStep === 3 && renderStep3Content()}
         {currentStep === 4 && renderStep4Content()}

@@ -42,6 +42,21 @@ function convertToDateAttendance(attendance: Attendance): AttendanceWithDates {
 }
 
 export const AttendanceApi = {
+  async exportAttendancesToCsv(course?: string, date?: Date): Promise<string> {
+    try {
+      logger.log('Exporting attendances to CSV', 'info');
+      const filePath = await invoke('export_attendances_to_csv', {
+        course: course || null,
+        date: date?.toISOString() || null
+      });
+      logger.log(`Successfully exported attendances to: ${filePath}`, 'success');
+      return filePath as string;
+    } catch (error) {
+      logger.log(`Failed to export attendances: ${error}`, 'error');
+      throw error;
+    }
+  },
+  
   async getAllCourses(): Promise<string[]> {
     try {
       logger.log('Fetching all courses', 'info');

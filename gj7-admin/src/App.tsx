@@ -9,6 +9,7 @@ import PurposeManager from "./components/PurposeManager";
 import About from "./components/About";
 import SettingsStyles from "./components/SettingsStyles";
 import { NavbarSettingsProvider } from "./hooks/useNavbarSettings";
+import AttendanceExport from "./components/AttendanceExport";
 
 
 function App() {
@@ -31,6 +32,7 @@ function App() {
                     <Route path="/attendance/realtime" element={<AttendanceRecordsRealtime />} />
                     <Route path="/purpose/manager" element={<PurposeManager />} />
                     <Route path="/settings" element={<SettingsStyles />} />
+                    <Route path="/attendance/export" element={<AttendanceExport />} />
                     <Route path="/about" element={<About />} />
                     </Routes>
                   </div>

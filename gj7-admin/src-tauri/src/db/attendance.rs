@@ -4,6 +4,9 @@ use uuid::Uuid;
 use rusqlite::{params, Connection, Result};
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
+use std::path::PathBuf;
+use std::io;
+use rusqlite::Error as SqliteError;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Attendance {
@@ -31,6 +34,32 @@ pub struct UpdateAttendanceRequest {
     pub purpose_label: Option<String>,
 }
 
+// Custom error type for CSV operations
+#[derive(Debug)]
+pub enum AttendanceExportError {
+    Csv(csv::Error),
+    Sqlite(SqliteError),
+    Io(io::Error),
+}
+
+impl From<csv::Error> for AttendanceExportError {
+    fn from(err: csv::Error) -> Self {
+        AttendanceExportError::Csv(err)
+    }
+}
+
+impl From<SqliteError> for AttendanceExportError {
+    fn from(err: SqliteError) -> Self {
+        AttendanceExportError::Sqlite(err)
+    }
+}
+
+impl From<io::Error> for AttendanceExportError {
+    fn from(err: io::Error) -> Self {
+        AttendanceExportError::Io(err)
+    }
+}
+
 pub trait AttendanceRepository: Send + Sync {
     fn clone_box(&self) -> Box<dyn AttendanceRepository + Send + Sync>;
     fn create_attendance(&self, conn: &Connection, attendance: CreateAttendanceRequest) -> Result<Attendance>;
@@ -50,6 +79,50 @@ pub trait AttendanceRepository: Send + Sync {
         date: Option<DateTime<Utc>>
     ) -> Result<Vec<Attendance>>;
     fn get_all_courses(&self, conn: &Connection) -> Result<Vec<String>>;
+    fn export_attendances_to_csv(
+        &self, 
+        conn: &Connection, 
+        path: PathBuf, 
+        attendances: Vec<Attendance>
+    ) -> std::result::Result<(), AttendanceExportError> {
+        let mut wtr = csv::Writer::from_path(path)?;
+
+        // Write header
+        wtr.write_record(&[
+            "ID",
+            "School ID",
+            "Full Name",
+            "Date",
+            "Time",
+            "Classification",
+            "Purpose"
+        ])?;
+
+        // Write data
+        for attendance in attendances {
+            // Convert UTC to local time and format
+            let local_time = attendance.time_in_date.with_timezone(&chrono::Local);
+            
+            // Format date as MM/DD/YYYY
+            let date_str = local_time.format("%m/%d/%Y").to_string();
+            
+            // Format time as hh:MM AM/PM
+            let time_str = local_time.format("%I:%M %p").to_string();
+            
+            wtr.write_record(&[
+                attendance.id.to_string(),
+                attendance.school_id,
+                attendance.full_name,
+                date_str,
+                time_str,
+                attendance.classification,
+                attendance.purpose_label.unwrap_or_default()
+            ])?;
+        }
+
+        wtr.flush()?;
+        Ok(())
+    }
 }
 
 // Implement Clone for SqliteAttendanceRepository

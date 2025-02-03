@@ -2,10 +2,68 @@
 use tauri::State;
 use uuid::Uuid;
 use crate::DbState;
-use crate::db::attendance::{Attendance, CreateAttendanceRequest, UpdateAttendanceRequest};
+use crate::db::attendance::{Attendance, CreateAttendanceRequest, UpdateAttendanceRequest, AttendanceExportError};
 use rusqlite::Result;
 use std::sync::Arc;
 use chrono::{DateTime, Utc};
+use std::path::PathBuf;
+use std::env;
+
+#[tauri::command]
+pub async fn export_attendances_to_csv(
+    state: State<'_, DbState>,
+    course: Option<String>,
+    date: Option<DateTime<Utc>>,
+) -> Result<String, String> {
+    let db = state.0.clone();
+    let attendance_repo = Arc::clone(&db.attendance_repository);
+
+    db.with_connection(move |conn| {
+        // Get the attendances based on filters
+        let attendances = attendance_repo.get_filtered_attendances(conn, course.clone(), date)?;
+        
+        // Generate filename with timestamp
+        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+        let filename = match (course.clone(), date) {
+            (Some(c), Some(d)) => format!("attendance_{}_{}_{}.csv", c, d.format("%Y%m%d"), timestamp),
+            (Some(c), None) => format!("attendance_{}_{}.csv", c, timestamp),
+            (None, Some(d)) => format!("attendance_{}_{}.csv", d.format("%Y%m%d"), timestamp),
+            (None, None) => format!("attendance_{}.csv", timestamp),
+        };
+
+        // Get downloads directory
+        let downloads_dir = if cfg!(target_os = "windows") {
+            if let Some(home) = env::var_os("USERPROFILE") {
+                PathBuf::from(home).join("Downloads")
+            } else {
+                return Err(rusqlite::Error::InvalidParameterName("Could not find Downloads directory".to_string()));
+            }
+        } else {
+            if let Some(home) = env::var_os("HOME") {
+                PathBuf::from(home).join("Downloads")
+            } else {
+                return Err(rusqlite::Error::InvalidParameterName("Could not find Downloads directory".to_string()));
+            }
+        };
+        
+        // Ensure Downloads directory exists
+        if !downloads_dir.exists() {
+            return Err(rusqlite::Error::InvalidParameterName("Downloads directory does not exist".to_string()));
+        }
+            
+        let file_path = downloads_dir.join(filename);
+
+        // Export to CSV
+        attendance_repo.export_attendances_to_csv(conn, file_path.clone(), attendances)
+            .map_err(|e| match e {
+                AttendanceExportError::Csv(err) => rusqlite::Error::InvalidParameterName(format!("CSV Error: {}", err)),
+                AttendanceExportError::Sqlite(err) => err,
+                AttendanceExportError::Io(err) => rusqlite::Error::InvalidParameterName(format!("IO Error: {}", err)),
+            })?;
+
+        Ok(file_path.to_string_lossy().to_string())
+    }).await.map_err(|e| e.to_string())
+}
 
 #[tauri::command]
 pub async fn get_filtered_attendances(
