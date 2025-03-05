@@ -4,7 +4,6 @@ use tauri::State;
 use crate::DbState;
 use crate::db::notes::{Note, CreateNoteRequest, UpdateNoteRequest};
 use rusqlite::{Result, Error as RusqliteError};
-use std::sync::Arc;
 
 #[tauri::command]
 pub async fn create_note(

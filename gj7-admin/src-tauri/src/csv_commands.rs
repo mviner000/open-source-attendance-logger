@@ -11,7 +11,7 @@ use crate::db::csv_import::ValidationErrorType;
 use crate::logger::{emit_log, LogMessage};
 use std::sync::Arc;
 use csv::StringRecord;
-use log::{info, error};
+use log::{info};
 
 #[derive(serde::Serialize, Debug)]
 pub struct AccountStatusCounts {

@@ -1,12 +1,16 @@
+// untallied_lanscape.ts
+
 import jsPDF from 'jspdf'
 import { AttendanceWithDates } from '@/types/attendance'
+import { SchoolAccountsApi } from '@/lib/school_accounts'
 
 // Constants for PDF layout
-const PAGE_WIDTH = 330.2 // Legal Landscape width in mm (13 inches = 330.2mm)
-const PAGE_HEIGHT = 215.9 // Legal Landscape height in mm (8.5 inches = 215.9mm)
-const MARGIN = 12.7 // 0.5 inches in mm
+const PAGE_WIDTH = 330.2 
+const PAGE_HEIGHT = 215.9 
+const MARGIN = 12.7 
 const CONTENT_WIDTH = PAGE_WIDTH - (MARGIN * 2)
 const ROW_HEIGHT = 5 
+const HEADER_ROW_HEIGHT = 10 // Increased header row height
 const ROWS_PER_PAGE = 30
 const HEADER_HEIGHT = 29
 const TEXT_PADDING = 1
@@ -17,7 +21,7 @@ export const downloadAttendanceTableAsPDF = async (attendances: AttendanceWithDa
   const pdf = new jsPDF({
     orientation: 'landscape',
     unit: 'mm',
-    format: [330.2, 215.9]  // Philippine legal paper size
+    format: [330.2, 215.9]  
   })
 
   const addHeader = (pageNumber: number, totalPages: number) => {
@@ -39,27 +43,74 @@ export const downloadAttendanceTableAsPDF = async (attendances: AttendanceWithDa
     )
   }
 
-  const addTableHeaders = (startY: number) => {
-    pdf.setFontSize(8)
-    pdf.setFont('helvetica', 'bold')
+  // Fetch unique courses dynamically
+  const accounts = await SchoolAccountsApi.getAllSchoolAccounts();
+  const courses = SchoolAccountsApi.extractUniqueCourses(accounts);
 
-    const headers = [
+  console.log("Fetched unique courses:", courses);
+
+  const addTableHeaders = (startY: number) => {
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'bold');
+  
+    const baseHeaders = [
       { text: 'Date', width: CONTENT_WIDTH * 0.08 },
       { text: 'Time', width: CONTENT_WIDTH * 0.06 },
       { text: 'Name', width: CONTENT_WIDTH * 0.18 },
-      { text: 'Classification', width: CONTENT_WIDTH * 0.30 },
-      { text: 'Purpose of Visit', width: CONTENT_WIDTH * 0.38 }
-    ]
+    ];
+  
+    const courseHeaders = courses.map(course => ({
+      text: course,
+      width: (CONTENT_WIDTH * 0.30) / courses.length
+    }));
+  
+    const purposeHeader = {
+      text: 'Purpose of Visit',
+      width: CONTENT_WIDTH * 0.32
+    };
+  
+    const headers = [...baseHeaders, ...courseHeaders, purposeHeader];
+  
+    let currentX = MARGIN;
+    headers.forEach((header, index) => {
+      pdf.rect(currentX, startY, header.width, HEADER_ROW_HEIGHT);
+      
+      // Vertical text for course headers
+      if (index >= 3 && index < headers.length - 1) {
+        const letters = header.text.split('').filter(letter => letter !== '-');
+        const columnMidY = startY + (HEADER_ROW_HEIGHT / 2);
+        const letterHeight = 3; // Height of each letter
+        const totalLetterHeight = letters.length * letterHeight;
+        const startLetterY = columnMidY - (totalLetterHeight / 2) + (letterHeight / 2);
 
-    let currentX = MARGIN
-    headers.forEach(header => {
-      pdf.rect(currentX, startY, header.width, ROW_HEIGHT)
-      pdf.text(header.text, currentX + 2, startY + ROW_HEIGHT / 2 + TEXT_PADDING)
-      currentX += header.width
-    })
-
-    return startY + ROW_HEIGHT
-  }
+        letters.forEach((letter, letterIndex) => {
+          pdf.text(
+            letter, 
+            currentX + (header.width / 2), 
+            startLetterY + (letterIndex * letterHeight), 
+            { 
+              align: 'center',
+              baseline: 'middle'
+            }
+          );
+        });
+      } else {
+        // Horizontal text for base headers and purpose
+        pdf.text(header.text, 
+          currentX + (header.width / 2), 
+          startY + (HEADER_ROW_HEIGHT / 2), 
+          { 
+            align: 'center',
+            baseline: 'middle'
+          }
+        );
+      }
+      
+      currentX += header.width;
+    });
+  
+    return startY + HEADER_ROW_HEIGHT;
+  };
 
   const totalPages = Math.ceil(attendances.length / ROWS_PER_PAGE)
 
@@ -103,13 +154,25 @@ export const downloadAttendanceTableAsPDF = async (attendances: AttendanceWithDa
       )
       currentX += CONTENT_WIDTH * 0.18
 
-      // Classification
-      pdf.rect(currentX, currentY, CONTENT_WIDTH * 0.30, ROW_HEIGHT)
-      pdf.text(record.classification, currentX + 2, currentY + ROW_HEIGHT / 2 + TEXT_PADDING)
-      currentX += CONTENT_WIDTH * 0.30
+      // Course columns
+      courses.forEach(course => {
+        const isChecked = record.classification === course;
+        const colWidth = (CONTENT_WIDTH * 0.30) / courses.length;
+        
+        pdf.rect(currentX, currentY, colWidth, ROW_HEIGHT);
+        if (isChecked) {
+          pdf.setTextColor(0, 0, 0);
+          pdf.text('✔', currentX + colWidth / 2, currentY + ROW_HEIGHT / 2 + TEXT_PADDING, { align: 'center' });
+        } else {
+          pdf.setTextColor(255, 255, 255); // White color
+          pdf.text('❌', currentX + colWidth / 2, currentY + ROW_HEIGHT / 2 + TEXT_PADDING, { align: 'center' });
+          pdf.setTextColor(0, 0, 0);
+        }
+        currentX += colWidth;
+      });
 
       // Purpose
-      pdf.rect(currentX, currentY, CONTENT_WIDTH * 0.38, ROW_HEIGHT)
+      pdf.rect(currentX, currentY, CONTENT_WIDTH * 0.32, ROW_HEIGHT)
       pdf.text(record.purpose_label || 'N/A', currentX + 2, currentY + ROW_HEIGHT / 2 + TEXT_PADDING)
 
       currentY += ROW_HEIGHT
@@ -124,4 +187,3 @@ export const downloadAttendanceTableAsPDF = async (attendances: AttendanceWithDa
 
   pdf.save('attendance_records.pdf')
 }
-

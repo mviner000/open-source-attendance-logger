@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useAttendanceWebSocket } from '@/utils/websocket';
 import { LogLevel } from '@/lib/logger';
-import { downloadAttendanceTableAsPDF } from '@/utils/pdfUtils';
+import { downloadAttendanceTableAsPDF } from '@/utils/untallied_lanscape';
 import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -19,6 +19,7 @@ const AttendanceRecordsRealtime: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
   const [view, setView] = useState<'card' | 'table'>('card');
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   const { toast } = useToast();
 

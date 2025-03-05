@@ -3,15 +3,10 @@
 use redis::{
     AsyncCommands, 
     Client, 
-    RedisResult,
     aio::Connection as AsyncConnection,
-    ToRedisArgs,
-    FromRedisValue,
-    IntoConnectionInfo,
 };
 use std::sync::Arc;
 use tokio::sync::{Mutex, Semaphore};
-use uuid::Uuid;
 use csv::StringRecord;
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;

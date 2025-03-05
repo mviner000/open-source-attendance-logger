@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { AttendanceApi, AttendanceWithDates, UpdateAttendanceRequest } from '../lib/attendance'
 import { logger, LogLevel } from '../lib/logger'
-import { downloadAttendanceTableAsPDF } from '@/utils/pdfUtils'
+import { downloadAttendanceTableAsPDF } from '@/utils/untallied_lanscape'
 import { ToastProvider, ToastViewport } from "@/components/ui/toast"
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
