@@ -20,6 +20,7 @@ pub mod semester;
 pub mod attendance;
 pub mod purpose;
 pub mod settings_styles;
+pub mod classification;
 
 use notes::NotesDatabase;
 use auth::AuthDatabase;
@@ -28,6 +29,7 @@ use semester::{SemesterRepository, SqliteSemesterRepository};
 use attendance::{AttendanceRepository, SqliteAttendanceRepository};
 use purpose::{PurposeRepository, SqlitePurposeRepository};
 use settings_styles::SettingsStylesDatabase;
+use classification::{ClassificationRepository, SqliteClassificationRepository};
 use std::sync::Arc;
 use crate::parallel_csv_validator::ParallelCsvValidator;
 
@@ -46,6 +48,7 @@ pub struct Database {
     pub attendance_repository: Arc<dyn AttendanceRepository + Send + Sync>,
     pub purpose_repository: Arc<dyn PurposeRepository + Send + Sync>,
     pub settings_styles: SettingsStylesDatabase,
+    pub classification_repository: Arc<dyn ClassificationRepository + Send + Sync>, 
     db_path: PathBuf,
 }
 
@@ -63,6 +66,7 @@ impl Clone for Database {
             attendance_repository: Arc::new(SqliteAttendanceRepository),
             purpose_repository: Arc::new(SqlitePurposeRepository),
             settings_styles: self.settings_styles.clone(),
+            classification_repository: Arc::new(SqliteClassificationRepository),
             db_path: self.db_path.clone(),
         }
     }
@@ -148,6 +152,7 @@ impl Database {
         semester::create_semesters_table(&conn)?;
         purpose::create_purposes_table(&conn)?;
         attendance::create_attendance_table(&conn)?;
+        classification::create_classifications_table(&conn)?; 
         
         let notes_db = NotesDatabase::init(&conn)?;
         let auth_db = AuthDatabase::init(&conn)?;
@@ -162,6 +167,7 @@ impl Database {
             semester_repository: Box::new(SqliteSemesterRepository),
             attendance_repository: Arc::new(SqliteAttendanceRepository),
             purpose_repository: Arc::new(SqlitePurposeRepository),
+            classification_repository: Arc::new(SqliteClassificationRepository),
             settings_styles: settings_styles_db,
             db_path,
         })

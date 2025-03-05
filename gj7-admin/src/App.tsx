@@ -10,7 +10,7 @@ import About from "./components/About";
 import SettingsStyles from "./components/SettingsStyles";
 import { NavbarSettingsProvider } from "./hooks/useNavbarSettings";
 import AttendanceExport from "./components/AttendanceExport";
-
+import ClassificationsManager from "./components/ClassificationsManager"; // New import
 
 function App() {
   return (
@@ -28,12 +28,13 @@ function App() {
                   <div className="h-full overflow-y-auto">
                     <AccountsStatsWithImportCSV />
                     <Routes>
-                    <Route path="/accounts/paginated" element={<SchoolAccountsDataTable />} />
-                    <Route path="/attendance/realtime" element={<AttendanceRecordsRealtime />} />
-                    <Route path="/purpose/manager" element={<PurposeManager />} />
-                    <Route path="/settings" element={<SettingsStyles />} />
-                    <Route path="/attendance/export" element={<AttendanceExport />} />
-                    <Route path="/about" element={<About />} />
+                      <Route path="/accounts/paginated" element={<SchoolAccountsDataTable />} />
+                      <Route path="/attendance/realtime" element={<AttendanceRecordsRealtime />} />
+                      <Route path="/purpose/manager" element={<PurposeManager />} />
+                      <Route path="/settings" element={<SettingsStyles />} />
+                      <Route path="/attendance/export" element={<AttendanceExport />} />
+                      <Route path="/classifications" element={<ClassificationsManager />} /> {/* New Route */}
+                      <Route path="/about" element={<About />} />
                     </Routes>
                   </div>
                 </div>

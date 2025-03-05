@@ -32,6 +32,16 @@ use log::error;
 use storage::AppStorage;
 use std::time::Duration;
 
+use crate::db::classification::{ClassificationRepository, ClassificationScanResult};
+
+use db::classification::{
+    Classification, 
+    ClassificationInput, 
+    ScannedCourse, 
+    SqliteClassificationRepository
+};
+use uuid::Uuid;
+
 pub use crate::config::{Config, DatabaseConfig}; 
 
 #[derive(Clone)]
@@ -66,6 +76,72 @@ async fn get_database_info(
     state: tauri::State<'_, DbState>
 ) -> Result<DatabaseInfo, String> {
     state.0.get_database_info().map_err(|e| e.to_string())
+}
+// Scan distinct courses from school accounts
+#[tauri::command]
+async fn scan_distinct_courses(
+    state: tauri::State<'_, DbState>,
+) -> Result<Vec<ScannedCourse>, String> {
+    let repo = SqliteClassificationRepository;
+    state.0.with_connection(|conn| {
+        repo.scan_distinct_courses(conn)
+    }).await.map_err(|e| e.to_string())
+}
+
+// Save or update classification
+#[tauri::command]
+async fn save_classification(
+    state: tauri::State<'_, DbState>,
+    input: ClassificationInput,
+) -> Result<(), String> {
+    let repo = SqliteClassificationRepository;
+    state.0.with_connection(|conn| {
+        let existing = repo.get_classification_by_long_name(conn, &input.long_name)?;
+        match existing {
+            Some(existing_classification) => {
+                let updated = Classification {
+                    id: existing_classification.id,
+                    long_name: input.long_name,
+                    short_name: input.short_name,
+                    placing: input.placing,
+                };
+                repo.update_classification(conn, &updated)?;
+            }
+            None => {
+                let new_classification = Classification {
+                    id: Uuid::new_v4(),
+                    long_name: input.long_name,
+                    short_name: input.short_name,
+                    placing: input.placing,
+                };
+                repo.create_classification(conn, &new_classification)?;
+            }
+        }
+        Ok(())
+    }).await.map_err(|e| e.to_string())
+}
+
+// Scan and save courses from school accounts
+#[tauri::command]
+async fn scan_and_save_courses(
+    state: tauri::State<'_, DbState>,
+) -> Result<ClassificationScanResult, String> {
+    let repo = SqliteClassificationRepository;
+    state.0.with_connection(|conn| {
+        repo.scan_and_save_courses_from_school_accounts(conn)
+    }).await.map_err(|e| e.to_string())
+}
+
+// Get classification by long name
+#[tauri::command]
+async fn get_classification_by_long_name(
+    state: tauri::State<'_, DbState>,
+    long_name: String,
+) -> Result<Option<Classification>, String> {
+    let repo = SqliteClassificationRepository;
+    state.0.with_connection(|conn| {
+        repo.get_classification_by_long_name(conn, &long_name)
+    }).await.map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -212,6 +288,11 @@ pub fn run() {
                 settings_styles_commands::delete_settings_style,
                 settings_styles_commands::search_settings_styles,
                 settings_styles_commands::get_settings_style_by_component_name,
+
+                scan_distinct_courses,
+                save_classification,
+                scan_and_save_courses,
+                get_classification_by_long_name,
 
                 // Network check
                 check_network
